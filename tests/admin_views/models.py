@@ -654,7 +654,8 @@ class PrePopulatedPostLargeSlug(models.Model):
     """
     title = models.CharField(max_length=100)
     published = models.BooleanField(default=False)
-    slug = models.SlugField(max_length=1000)
+    # `db_index=False` because MySQL cannot index large CharField (#21196).
+    slug = models.SlugField(max_length=1000, db_index=False)
 
 
 class AdminOrderedField(models.Model):
@@ -839,3 +840,26 @@ class ChildOfReferer(ParentWithFK):
 
 class M2MReference(models.Model):
     ref = models.ManyToManyField('self')
+
+
+# Models for #23431
+class ReferencedByInline(models.Model):
+    pass
+
+
+class InlineReference(models.Model):
+    fk = models.ForeignKey(ReferencedByInline, related_name='hidden+')
+
+
+class InlineReferer(models.Model):
+    refs = models.ManyToManyField(InlineReference)
+
+
+# Models for #23604
+class Recipe(models.Model):
+    name = models.CharField(max_length=20)
+
+
+class Ingredient(models.Model):
+    name = models.CharField(max_length=20)
+    recipes = models.ManyToManyField('Recipe', related_name='ingredients')

@@ -57,6 +57,7 @@ Biggs
 Bjørn
 blocktrans
 blog
+blogs
 Boersma
 boilerplatish
 Bokmål
@@ -133,6 +134,7 @@ datatype
 datetimes
 dbshell
 de
+Debian
 deconstruct
 deconstructing
 deepcopy
@@ -203,6 +205,7 @@ filesizeformat
 filesystem
 filesystems
 findstatic
+Firesheep
 firstof
 fk
 flatpage
@@ -264,6 +267,7 @@ Honza
 hostname
 hostnames
 howto
+hstore
 html
 http
 https
@@ -329,6 +333,7 @@ Kyngesburye
 latin
 lawrence
 Lawrence
+Leidel
 lexer
 lhs
 lifecycle
@@ -351,9 +356,11 @@ Loïc
 lorem
 lt
 lte
+Luhn
 Magee
 makemessages
 makemigrations
+Mako
 Mapnik
 MBR
 memcache
@@ -379,6 +386,7 @@ modelformset
 modwsgi
 monkeypatched
 Montréal
+mssql
 multijoins
 multiline
 multipart
@@ -390,6 +398,7 @@ myapp
 myproject
 mysite
 mysql
+mysqlclient
 naïve
 namespace
 namespaced
@@ -426,6 +435,7 @@ Palau
 params
 parens
 pdf
+PEM
 perl
 permalink
 pessimization
@@ -465,6 +475,7 @@ prepopulate
 prepopulated
 prepopulates
 preprocess
+Procida
 programmatically
 projectname
 proxied
@@ -571,7 +582,10 @@ sqlmigrate
 sqlsequencereset
 squashmigrations
 ssi
+SSL
 stacktrace
+startapp
+startproject
 startswith
 stateful
 staticfile
@@ -741,6 +755,7 @@ www
 xe
 xgettext
 xref
+XSS
 xxxxx
 yesno
 Zope

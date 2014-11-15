@@ -179,7 +179,10 @@ class SessionTestsMixin(object):
             try:
                 session.save()
             except AttributeError:
-                self.fail("The session object did not save properly.  Middleware may be saving cache items without namespaces.")
+                self.fail(
+                    "The session object did not save properly. "
+                    "Middleware may be saving cache items without namespaces."
+                )
             self.assertNotEqual(session.session_key, '1')
             self.assertEqual(session.get('cat'), None)
             session.delete()
@@ -283,7 +286,7 @@ class SessionTestsMixin(object):
             self.assertEqual({}, self.session.decode(bad_encode))
             # check that the failed decode is logged
             self.assertEqual(len(calls), 1)
-            self.assertTrue('corrupted' in calls[0])
+            self.assertIn('corrupted', calls[0])
 
     def test_actual_expiry(self):
         # this doesn't work with JSONSerializer (serializing timedelta)
@@ -597,8 +600,11 @@ class SessionMiddlewareTests(unittest.TestCase):
         # Check that the cookie was deleted, not recreated.
         # A deleted cookie header looks like:
         #  Set-Cookie: sessionid=; expires=Thu, 01-Jan-1970 00:00:00 GMT; Max-Age=0; Path=/
-        self.assertEqual('Set-Cookie: {0}=; expires=Thu, 01-Jan-1970 00:00:00 GMT; Max-Age=0; Path=/'.format(settings.SESSION_COOKIE_NAME),
-            str(response.cookies[settings.SESSION_COOKIE_NAME]))
+        self.assertEqual(
+            'Set-Cookie: {0}=; expires=Thu, 01-Jan-1970 00:00:00 GMT; '
+            'Max-Age=0; Path=/'.format(settings.SESSION_COOKIE_NAME),
+            str(response.cookies[settings.SESSION_COOKIE_NAME])
+        )
 
 
 class CookieSessionTests(SessionTestsMixin, TestCase):

@@ -13,6 +13,7 @@ from django.contrib.gis.db.backends.spatialite.introspection import SpatiaLiteIn
 from django.contrib.gis.db.backends.spatialite.operations import SpatiaLiteOperations
 from django.contrib.gis.db.backends.spatialite.schema import SpatialiteSchemaEditor
 from django.utils import six
+from django.utils.functional import cached_property
 
 
 class DatabaseFeatures(BaseSpatialFeatures, SQLiteDatabaseFeatures):
@@ -20,8 +21,17 @@ class DatabaseFeatures(BaseSpatialFeatures, SQLiteDatabaseFeatures):
     # SpatiaLite can only count vertices in LineStrings
     supports_num_points_poly = False
 
+    @cached_property
+    def supports_initspatialmetadata_in_one_transaction(self):
+        # SpatiaLite 4.1+ support initializing all metadata in one transaction
+        # which can result in a significant performance improvement when
+        # creating the database.
+        return self.connection.ops.spatial_version >= (4, 1, 0)
+
 
 class DatabaseWrapper(SQLiteDatabaseWrapper):
+    SchemaEditorClass = SpatialiteSchemaEditor
+
     def __init__(self, *args, **kwargs):
         # Before we get too far, make sure pysqlite 2.5+ is installed.
         if Database.version_info < (2, 5, 0):
@@ -46,10 +56,6 @@ class DatabaseWrapper(SQLiteDatabaseWrapper):
         self.client = SpatiaLiteClient(self)
         self.creation = SpatiaLiteCreation(self)
         self.introspection = SpatiaLiteIntrospection(self)
-
-    def schema_editor(self, *args, **kwargs):
-        "Returns a new instance of this backend's SchemaEditor"
-        return SpatialiteSchemaEditor(self, *args, **kwargs)
 
     def get_new_connection(self, conn_params):
         conn = super(DatabaseWrapper, self).get_new_connection(conn_params)

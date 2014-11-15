@@ -23,7 +23,7 @@ Third-party tools, most notably `South <http://south.aeracode.org>`_,
 provided support for these additional types of change, but it was considered
 important enough that support was brought into core Django.
 
-Two Commands
+The Commands
 ------------
 
 There are several commands which you will use to interact with migrations
@@ -213,8 +213,13 @@ will be.
 
 Be aware, however, that unmigrated apps cannot depend on migrated apps, by the
 very nature of not having migrations. This means that it is not generally
-possible to have an unmigrated app have a ForeignKey or ManyToManyField to
-a migrated app; some cases may work, but it will eventually fail.
+possible to have an unmigrated app have a ``ForeignKey`` or ``ManyToManyField``
+to a migrated app; some cases may work, but it will eventually fail.
+
+.. warning::
+
+    Even if things appear to work with unmigrated apps depending on migrated
+    apps, Django may not generate all the necessary foreign key constraints!
 
 This is particularly apparent if you use swappable models (e.g.
 ``AUTH_USER_MODEL``), as every app that uses swappable models will need
@@ -309,6 +314,13 @@ Note that this only works given two things:
   that your database doesn't match your models, you'll just get errors when
   migrations try to modify those tables.
 
+.. versionadded:: 1.8
+
+If you want to give the migration(s) a meaningful name instead of a generated one,
+you can use the :djadminopt:`--name` option::
+
+    $ python manage.py makemigrations --name changed_my_model your_app_label
+
 .. _historical-models:
 
 Historical models
@@ -333,7 +345,9 @@ They will, however, have the same fields, relationships and ``Meta`` options
 
 References to functions in field options such as ``upload_to`` and
 ``limit_choices_to`` are serialized in migrations, so the functions will need
-to be kept around for as long as there is a migration referencing them.
+to be kept around for as long as there is a migration referencing them. Any
+:doc:`custom model fields </howto/custom-model-fields>` will also need to be
+kept, since these are imported directly by migrations.
 
 In addition, the base classes of the model are just stored as pointers,
 so you must always keep base classes around for as long as there is a migration
@@ -450,7 +464,7 @@ Once the operation sequence has been reduced as much as possible - the amount
 possible depends on how closely intertwined your models are and if you have
 any :class:`~django.db.migrations.operations.RunSQL`
 or :class:`~django.db.migrations.operations.RunPython` operations (which can't
-be optimized through) - Django will them write it back out into a new set of
+be optimized through) - Django will then write it back out into a new set of
 initial migration files.
 
 These files are marked to say they replace the previously-squashed migrations,
@@ -534,11 +548,16 @@ Django can serialize the following:
 - ``int``, ``long``, ``float``, ``bool``, ``str``, ``unicode``, ``bytes``, ``None``
 - ``list``, ``set``, ``tuple``, ``dict``
 - ``datetime.date``, ``datetime.time``, and ``datetime.datetime`` instances
+  (include those that are timezone-aware)
 - ``decimal.Decimal`` instances
 - Any Django field
-- Any function or method reference (e.g. ``datetime.datetime.today``)
-- Any class reference
+- Any function or method reference (e.g. ``datetime.datetime.today``) (must be in module's top-level scope)
+- Any class reference (must be in module's top-level scope)
 - Anything with a custom ``deconstruct()`` method (:ref:`see below <custom-deconstruct-method>`)
+
+.. versionchanged:: 1.7.1
+
+    Support for serializing timezone-aware datetimes was added.
 
 Django can serialize the following on Python 3 only:
 
@@ -546,6 +565,7 @@ Django can serialize the following on Python 3 only:
 
 Django cannot serialize:
 
+- Nested classes
 - Arbitrary class instances (e.g. ``MyClass(4.3, 5.7)``)
 - Lambdas
 
@@ -591,9 +611,14 @@ of three things ``(path, args, kwargs)``:
 Django will write out the value as an instantiation of your class with the
 given arguments, similar to the way it writes out references to Django fields.
 
+To prevent a new migration from being created each time
+:djadmin:`makemigrations` is run, you should also add a ``__eq__()`` method to
+the decorated class. This function will be called by Django's migration
+framework to detect changes between states.
+
 As long as all of the arguments to your class' constructor are themselves
-serializable, you can just use the ``@deconstructible`` class decorator
-from ``django.utils.deconstruct`` to add the method::
+serializable, you can use the ``@deconstructible`` class decorator from
+``django.utils.deconstruct`` to add the ``deconstruct()`` method::
 
     from django.utils.deconstruct import deconstructible
 
@@ -601,7 +626,12 @@ from ``django.utils.deconstruct`` to add the method::
     class MyCustomClass(object):
 
         def __init__(self, foo=1):
+            self.foo = foo
             ...
+
+        def __eq__(self, other):
+            return self.foo == other.foo
+
 
 The decorator adds logic to capture and preserve the arguments on their
 way into your constructor, and then returns those arguments exactly when
@@ -616,7 +646,8 @@ If you already have pre-existing migrations created with
 `South <http://south.aeracode.org>`_, then the upgrade process to use
 ``django.db.migrations`` is quite simple:
 
-* Ensure all installs are fully up-to-date with their migrations
+* Ensure all installs are fully up-to-date with their migrations.
+* Remove ``'south'`` from :setting:`INSTALLED_APPS`.
 * Delete all your (numbered) migration files, but not the directory or
   ``__init__.py`` - make sure you remove the ``.pyc`` files too.
 * Run ``python manage.py makemigrations``. Django should see the empty
@@ -646,3 +677,9 @@ your Django migrations in the ``migrations`` directory.
 
 More information is available in the
 `South 1.0 release notes <http://south.readthedocs.org/en/latest/releasenotes/1.0.html#library-migration-path>`_.
+
+.. seealso::
+
+    :doc:`The Migrations Operations Reference </ref/migration-operations>`
+        Covers the schema operations API, special operations, and writing your
+        own operations.

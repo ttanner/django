@@ -52,7 +52,7 @@ require_safe = require_http_methods(["GET", "HEAD"])
 require_safe.__doc__ = "Decorator to require that a view only accept safe methods: GET and HEAD."
 
 
-def condition(etag_func=None, last_modified_func=None, update=("PATCH", "PUT")):
+def condition(etag_func=None, last_modified_func=None, update=("DELETE", "PATCH", "POST", "PUT")):
     """
     Decorator to support conditional retrieval (or change) for a view
     function.
@@ -75,9 +75,9 @@ def condition(etag_func=None, last_modified_func=None, update=("PATCH", "PUT")):
     plus If-modified-since headers) will result in the view function being
     called.
 
-    The update parameter specifies for which methods (default: PATCH and PUT)
-    the response header should be updated with the latest values.
-    Otherwise the initial values are kept.
+    The update parameter specifies for which state-changing methods
+    (default: DELETE, PATCH, POST, PUT) the response header should be updated
+    with the latest values or suppressed. Otherwise the initial values are kept.
     see http://tools.ietf.org/id/draft-reschke-http-etag-on-write-09.txt
     """
     def decorator(func):
@@ -110,6 +110,7 @@ def condition(etag_func=None, last_modified_func=None, update=("PATCH", "PUT")):
                 # Compute values (if any) for the requested resource.
                 if etag_func:
                     return etag_func(request, *args, **kwargs)
+
             def get_last_modified():
                 if last_modified_func:
                     dt = last_modified_func(request, *args, **kwargs)
@@ -152,7 +153,7 @@ def condition(etag_func=None, last_modified_func=None, update=("PATCH", "PUT")):
                         }
                     )
                     response = HttpResponse(status=412)
-                elif (not if_none_match and request.method == "GET" and
+                elif (not if_none_match and request.method in ("GET", "HEAD") and
                         res_last_modified and if_modified_since and
                         res_last_modified <= if_modified_since):
                     response = HttpResponseNotModified()

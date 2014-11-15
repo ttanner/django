@@ -212,6 +212,14 @@ class AlterModelTable(Operation):
                 old_model._meta.db_table,
                 new_model._meta.db_table,
             )
+            # Rename M2M fields whose name is based on this model's db_table
+            for (old_field, new_field) in zip(old_model._meta.local_many_to_many, new_model._meta.local_many_to_many):
+                if new_field.rel.through._meta.auto_created:
+                    schema_editor.alter_db_table(
+                        new_field.rel.through,
+                        old_field.rel.through._meta.db_table,
+                        new_field.rel.through._meta.db_table,
+                    )
 
     def database_backwards(self, app_label, schema_editor, from_state, to_state):
         return self.database_forwards(app_label, schema_editor, from_state, to_state)
@@ -233,9 +241,7 @@ class AlterUniqueTogether(Operation):
     def __init__(self, name, unique_together):
         self.name = name
         unique_together = normalize_together(unique_together)
-        # need None rather than an empty set to prevent infinite migrations
-        # after removing unique_together from a model
-        self.unique_together = set(tuple(cons) for cons in unique_together) or None
+        self.unique_together = set(tuple(cons) for cons in unique_together)
 
     def state_forwards(self, app_label, state):
         model_state = state.models[app_label, self.name.lower()]
@@ -273,9 +279,7 @@ class AlterIndexTogether(Operation):
     def __init__(self, name, index_together):
         self.name = name
         index_together = normalize_together(index_together)
-        # need None rather than an empty set to prevent infinite migrations
-        # after removing unique_together from a model
-        self.index_together = set(tuple(cons) for cons in index_together) or None
+        self.index_together = set(tuple(cons) for cons in index_together)
 
     def state_forwards(self, app_label, state):
         model_state = state.models[app_label, self.name.lower()]

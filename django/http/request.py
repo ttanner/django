@@ -15,7 +15,9 @@ from django.core.files import uploadhandler
 from django.http.multipartparser import MultiPartParser, MultiPartParserError
 from django.utils import six
 from django.utils.datastructures import MultiValueDict, ImmutableList
-from django.utils.encoding import force_bytes, force_text, force_str, iri_to_uri
+from django.utils.encoding import (
+    force_bytes, force_text, force_str, escape_uri_path, iri_to_uri,
+)
 from django.utils.six.moves.urllib.parse import parse_qsl, urlencode, quote, urljoin, urlsplit
 
 
@@ -97,7 +99,10 @@ class HttpRequest(object):
     def get_full_path(self):
         # RFC 3986 requires query string arguments to be in the ASCII range.
         # Rather than crash if this doesn't happen, we encode defensively.
-        return '%s%s' % (self.path, ('?' + iri_to_uri(self.META.get('QUERY_STRING', ''))) if self.META.get('QUERY_STRING', '') else '')
+        return '%s%s' % (
+            escape_uri_path(self.path),
+            ('?' + iri_to_uri(self.META.get('QUERY_STRING', ''))) if self.META.get('QUERY_STRING', '') else ''
+        )
 
     def get_signed_cookie(self, key, default=RAISE_ERROR, salt='', max_age=None):
         """
@@ -157,7 +162,9 @@ class HttpRequest(object):
             try:
                 header, value = settings.SECURE_PROXY_SSL_HEADER
             except ValueError:
-                raise ImproperlyConfigured('The SECURE_PROXY_SSL_HEADER setting must be a tuple containing two values.')
+                raise ImproperlyConfigured(
+                    'The SECURE_PROXY_SSL_HEADER setting must be a tuple containing two values.'
+                )
             if self.META.get(header, None) == value:
                 return 'https'
         # Failing that, fall back to _get_scheme(), which is a hook for

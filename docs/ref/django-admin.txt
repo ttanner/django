@@ -135,6 +135,25 @@ to perform only security and compatibility checks, you would run::
 
 List all available tags.
 
+.. django-admin-option:: --deploy
+
+.. versionadded:: 1.8
+
+The ``--deploy`` option activates some additional checks that are only relevant
+in a deployment setting.
+
+You can use this option in your local development environment, but since your
+local development settings module may not have many of your production settings,
+you will probably want to point the ``check`` command at a different settings
+module, either by setting the ``DJANGO_SETTINGS_MODULE`` environment variable,
+or by passing the ``--settings`` option::
+
+    python manage.py check --deploy --settings=production_settings
+
+Or you could run it directly on a production or staging deployment to verify
+that the correct settings are in use (omitting ``--settings``). You could even
+make it part of your integration test suite.
+
 compilemessages
 ---------------
 
@@ -647,6 +666,11 @@ Use the ``--keep-pot`` option to prevent Django from deleting the temporary
 .pot files it generates before creating the .po file. This is useful for
 debugging errors which may prevent the final language files from being created.
 
+.. seealso::
+
+    See :ref:`customizing-makemessages` for instructions on how to customize
+    the keywords that :djadmin:`makemessages` passes to ``xgettext``.
+
 makemigrations [<app_label>]
 ----------------------------
 
@@ -661,8 +685,6 @@ Migrations, their relationship with apps and more are covered in depth in
 Providing one or more app names as arguments will limit the migrations created
 to the app(s) specified and any dependencies needed (the table at the other end
 of a ``ForeignKey``, for example).
-
-The :djadminopt:`--noinput` option may be provided to suppress all user prompts.
 
 .. django-admin-option:: --empty
 
@@ -681,7 +703,16 @@ written.
 
 .. django-admin-option:: --merge
 
-The ``--merge`` option enables fixing of migration conflicts.
+The ``--merge`` option enables fixing of migration conflicts. The
+:djadminopt:`--noinput` option may be provided to suppress user prompts during
+a merge.
+
+.. django-admin-option:: --name, -n
+
+.. versionadded:: 1.8
+
+The ``--name`` option allows you to give the migration(s) a custom name instead
+of a generated one.
 
 migrate [<app_label> [<migrationname>]]
 ---------------------------------------
@@ -926,6 +957,9 @@ A hostname containing ASCII-only characters can also be used.
 If the :doc:`staticfiles</ref/contrib/staticfiles>` contrib app is enabled
 (default in new projects) the :djadmin:`runserver` command will be overridden
 with its own :ref:`runserver<staticfiles-runserver>` command.
+
+If :djadmin:`migrate` was not previousy executed, the table that stores the
+history of migrations is created at first run of ``runserver``.
 
 .. django-admin-option:: --noreload
 

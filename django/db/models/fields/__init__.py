@@ -6,6 +6,7 @@ import copy
 import datetime
 import decimal
 import math
+import uuid
 import warnings
 from base64 import b64decode, b64encode
 from itertools import tee
@@ -40,6 +41,7 @@ __all__ = [str(x) for x in (
     'GenericIPAddressField', 'IPAddressField', 'IntegerField', 'NOT_PROVIDED',
     'NullBooleanField', 'PositiveIntegerField', 'PositiveSmallIntegerField',
     'SlugField', 'SmallIntegerField', 'TextField', 'TimeField', 'URLField',
+    'UUIDField',
 )]
 
 
@@ -347,7 +349,7 @@ class Field(RegisterLookupMixin):
             "validators": "_validators",
             "verbose_name": "_verbose_name",
         }
-        equals_comparison = set(["choices", "validators", "db_tablespace"])
+        equals_comparison = {"choices", "validators", "db_tablespace"}
         for name, default in possibles.items():
             value = getattr(self, attr_overrides.get(name, name))
             # Unroll anything iterable for choices into a concrete list
@@ -558,6 +560,11 @@ class Field(RegisterLookupMixin):
     def db_type_suffix(self, connection):
         return connection.creation.data_types_suffix.get(self.get_internal_type())
 
+    def get_db_converters(self, connection):
+        if hasattr(self, 'from_db_value'):
+            return [self.from_db_value]
+        return []
+
     @property
     def unique(self):
         return self._unique or self.primary_key
@@ -630,8 +637,6 @@ class Field(RegisterLookupMixin):
         """
         Perform preliminary non-db specific lookup checks and conversions
         """
-        if hasattr(value, 'prepare'):
-            return value.prepare()
         if hasattr(value, '_prepare'):
             return value._prepare()
 
@@ -722,9 +727,6 @@ class Field(RegisterLookupMixin):
                    not connection.features.interprets_empty_strings_as_nulls)):
             return None
         return ""
-
-    def get_validator_unique_lookup_type(self):
-        return '%s__exact' % self.name
 
     def get_choices(self, include_blank=True, blank_choice=BLANK_CHOICE_DASH, limit_choices_to=None):
         """Returns choices with a default blank choices included, for use
@@ -1395,9 +1397,13 @@ class DateTimeField(DateField):
             # For backwards compatibility, interpret naive datetimes in local
             # time. This won't work during DST change, but we can't do much
             # about it, so we let the exceptions percolate up the call stack.
-            warnings.warn("DateTimeField %s.%s received a naive datetime (%s)"
+            try:
+                name = '%s.%s' % (self.model.__name__, self.name)
+            except AttributeError:
+                name = '(unbound)'
+            warnings.warn("DateTimeField %s received a naive datetime (%s)"
                           " while time zone support is active." %
-                          (self.model.__name__, self.name, value),
+                          (name, value),
                           RuntimeWarning)
             default_timezone = timezone.get_default_timezone()
             value = timezone.make_aware(value, default_timezone)
@@ -2212,3 +2218,44 @@ class BinaryField(Field):
         if isinstance(value, six.text_type):
             return six.memoryview(b64decode(force_bytes(value)))
         return value
+
+
+class UUIDField(Field):
+    default_error_messages = {
+        'invalid': _("'%(value)s' is not a valid UUID."),
+    }
+    description = 'Universally unique identifier'
+    empty_strings_allowed = False
+
+    def __init__(self, **kwargs):
+        kwargs['max_length'] = 32
+        super(UUIDField, self).__init__(**kwargs)
+
+    def get_internal_type(self):
+        return "UUIDField"
+
+    def get_prep_value(self, value):
+        if isinstance(value, uuid.UUID):
+            return value.hex
+        if isinstance(value, six.string_types):
+            return value.replace('-', '')
+        return value
+
+    def to_python(self, value):
+        if value and not isinstance(value, uuid.UUID):
+            try:
+                return uuid.UUID(value)
+            except ValueError:
+                raise exceptions.ValidationError(
+                    self.error_messages['invalid'],
+                    code='invalid',
+                    params={'value': value},
+                )
+        return value
+
+    def formfield(self, **kwargs):
+        defaults = {
+            'form_class': forms.UUIDField,
+        }
+        defaults.update(kwargs)
+        return super(UUIDField, self).formfield(**defaults)

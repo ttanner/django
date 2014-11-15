@@ -14,7 +14,7 @@ from django.core.management.base import CommandError, BaseCommand
 from django.core.management.utils import (handle_extensions, find_command,
     popen_wrapper)
 from django.utils.encoding import force_str
-from django.utils.functional import total_ordering
+from django.utils.functional import cached_property, total_ordering
 from django.utils import six
 from django.utils.text import get_text_list
 from django.utils.jslex import prepare_js_for_gettext
@@ -63,19 +63,20 @@ class TranslatableFile(object):
             command.stdout.write('processing file %s in %s\n' % (self.file, self.dirpath))
         _, file_ext = os.path.splitext(self.file)
         if domain == 'djangojs' and file_ext in command.extensions:
-            is_templatized = True
             orig_file = os.path.join(self.dirpath, self.file)
-            with io.open(orig_file, encoding=settings.FILE_CHARSET) as fp:
-                src_data = fp.read()
-            src_data = prepare_js_for_gettext(src_data)
-            thefile = '%s.c' % self.file
-            work_file = os.path.join(self.dirpath, thefile)
-            with io.open(work_file, "w", encoding='utf-8') as fp:
-                fp.write(src_data)
+            work_file = orig_file
+            is_templatized = command.gettext_version < (0, 18, 3)
+            if is_templatized:
+                with io.open(orig_file, 'r', encoding=settings.FILE_CHARSET) as fp:
+                    src_data = fp.read()
+                src_data = prepare_js_for_gettext(src_data)
+                work_file = os.path.join(self.dirpath, '%s.c' % self.file)
+                with io.open(work_file, "w", encoding='utf-8') as fp:
+                    fp.write(src_data)
             args = [
                 'xgettext',
                 '-d', domain,
-                '--language=C',
+                '--language=%s' % ('C' if is_templatized else 'JavaScript',),
                 '--keyword=gettext_noop',
                 '--keyword=gettext_lazy',
                 '--keyword=ngettext_lazy:1,2',
@@ -85,17 +86,16 @@ class TranslatableFile(object):
             ] + command.xgettext_options
             args.append(work_file)
         elif domain == 'django' and (file_ext == '.py' or file_ext in command.extensions):
-            thefile = self.file
             orig_file = os.path.join(self.dirpath, self.file)
+            work_file = orig_file
             is_templatized = file_ext in command.extensions
             if is_templatized:
-                with io.open(orig_file, 'r', encoding=settings.FILE_CHARSET) as fp:
+                with io.open(orig_file, encoding=settings.FILE_CHARSET) as fp:
                     src_data = fp.read()
-                thefile = '%s.py' % self.file
                 content = templatize(src_data, orig_file[2:])
-                with io.open(os.path.join(self.dirpath, thefile), "w", encoding='utf-8') as fp:
+                work_file = os.path.join(self.dirpath, '%s.py' % self.file)
+                with io.open(work_file, "w", encoding='utf-8') as fp:
                     fp.write(content)
-            work_file = os.path.join(self.dirpath, thefile)
             args = [
                 'xgettext',
                 '-d', domain,
@@ -227,10 +227,6 @@ class Command(BaseCommand):
         ignore_patterns = options.get('ignore_patterns')
         if options.get('use_default_ignore_patterns'):
             ignore_patterns += ['CVS', '.*', '*~', '*.pyc']
-        base_path = os.path.abspath('.')
-        for path in (settings.MEDIA_ROOT, settings.STATIC_ROOT):
-            if path and path.startswith(base_path):
-                ignore_patterns.append('%s*' % path[len(base_path) + 1:])
         self.ignore_patterns = list(set(ignore_patterns))
 
         # Avoid messing with mutable class variables
@@ -311,6 +307,15 @@ class Command(BaseCommand):
             if not self.keep_pot:
                 self.remove_potfiles()
 
+    @cached_property
+    def gettext_version(self):
+        out, err, status = popen_wrapper(['xgettext', '--version'])
+        m = re.search(r'(\d)\.(\d+)\.(\d+)', out)
+        if m:
+            return tuple(int(d) for d in m.groups())
+        else:
+            raise CommandError("Unable to get gettext version. Is it installed?")
+
     def build_potfiles(self):
         """
         Build pot files and apply msguniq to them.
@@ -376,9 +381,11 @@ class Command(BaseCommand):
                 norm_patterns.append(p)
 
         all_files = []
+        ignored_roots = [os.path.normpath(p) for p in (settings.MEDIA_ROOT, settings.STATIC_ROOT) if p]
         for dirpath, dirnames, filenames in os.walk(root, topdown=True, followlinks=self.symlinks):
             for dirname in dirnames[:]:
-                if is_ignored(os.path.normpath(os.path.join(dirpath, dirname)), norm_patterns):
+                if (is_ignored(os.path.normpath(os.path.join(dirpath, dirname)), norm_patterns) or
+                        os.path.join(os.path.abspath(dirpath), dirname) in ignored_roots):
                     dirnames.remove(dirname)
                     if self.verbosity > 1:
                         self.stdout.write('ignoring directory %s\n' % dirname)

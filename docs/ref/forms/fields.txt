@@ -387,10 +387,16 @@ For each field, we describe the default widget used if you don't specify
 
     .. attribute:: choices
 
-        An iterable (e.g., a list or tuple) of 2-tuples to use as choices for this
-        field. This argument accepts the same formats as the ``choices`` argument
-        to a model field. See the :ref:`model field reference documentation on
-        choices <field-choices>` for more details.
+        Either an iterable (e.g., a list or tuple) of 2-tuples to use as
+        choices for this field, or a callable that returns such an iterable.
+        This argument accepts the same formats as the ``choices`` argument to a
+        model field. See the :ref:`model field reference documentation on
+        choices <field-choices>` for more details. If the argument is a
+        callable, it is evaluated each time the field's form is initialized.
+
+        .. versionchanged:: 1.8
+
+            The ability to pass a callable to ``choices`` was added.
 
 ``TypedChoiceField``
 ~~~~~~~~~~~~~~~~~~~~
@@ -888,6 +894,20 @@ For each field, we describe the default widget used if you don't specify
 
     These are the same as ``CharField.max_length`` and ``CharField.min_length``.
 
+``UUIDField``
+-------------
+
+.. versionadded:: 1.8
+
+.. class:: UUIDField(**kwargs)
+
+    * Default widget: :class:`TextInput`
+    * Empty value: ``''`` (an empty string)
+    * Normalizes to: A :class:`~python:uuid.UUID` object.
+    * Error message keys: ``required``, ``invalid``
+
+    This field will accept any string format accepted as the ``hex`` argument
+    to the :class:`~python:uuid.UUID` constructor.
 
 Slightly complex built-in ``Field`` classes
 -------------------------------------------

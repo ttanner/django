@@ -30,6 +30,7 @@ import datetime
 import pickle
 import re
 import os
+import uuid
 from decimal import Decimal
 from unittest import skipIf
 import warnings
@@ -46,7 +47,7 @@ from django.forms import (
     Form, forms, HiddenInput, ImageField, IntegerField, MultipleChoiceField,
     NullBooleanField, NumberInput, PasswordInput, RadioSelect, RegexField,
     SplitDateTimeField, TextInput, Textarea, TimeField, TypedChoiceField,
-    TypedMultipleChoiceField, URLField, ValidationError, Widget,
+    TypedMultipleChoiceField, URLField, UUIDField, ValidationError, Widget,
 )
 from django.test import SimpleTestCase
 from django.utils import formats
@@ -960,6 +961,28 @@ class FieldsTests(SimpleTestCase):
         self.assertEqual('5', f.clean('5'))
         self.assertRaisesMessage(ValidationError, "'Select a valid choice. 6 is not one of the available choices.'", f.clean, '6')
 
+    def test_choicefield_callable(self):
+        choices = lambda: [('J', 'John'), ('P', 'Paul')]
+        f = ChoiceField(choices=choices)
+        self.assertEqual('J', f.clean('J'))
+
+    def test_choicefield_callable_may_evaluate_to_different_values(self):
+        choices = []
+
+        def choices_as_callable():
+            return choices
+
+        class ChoiceFieldForm(Form):
+            choicefield = ChoiceField(choices=choices_as_callable)
+
+        choices = [('J', 'John')]
+        form = ChoiceFieldForm()
+        self.assertEqual([('J', 'John')], list(form.fields['choicefield'].choices))
+
+        choices = [('P', 'Paul')]
+        form = ChoiceFieldForm()
+        self.assertEqual([('P', 'Paul')], list(form.fields['choicefield'].choices))
+
     # TypedChoiceField ############################################################
     # TypedChoiceField is just like ChoiceField, except that coerced types will
     # be returned:
@@ -1342,3 +1365,24 @@ class FieldsTests(SimpleTestCase):
         self.assertTrue(f.has_changed(datetime.datetime(2008, 5, 6, 12, 40, 00), ['2008-05-06', '12:40:00']))
         self.assertFalse(f.has_changed(datetime.datetime(2008, 5, 6, 12, 40, 00), ['06/05/2008', '12:40']))
         self.assertTrue(f.has_changed(datetime.datetime(2008, 5, 6, 12, 40, 00), ['06/05/2008', '12:41']))
+
+    def test_uuidfield_1(self):
+        field = UUIDField()
+        value = field.clean('550e8400e29b41d4a716446655440000')
+        self.assertEqual(value, uuid.UUID('550e8400e29b41d4a716446655440000'))
+
+    def test_uuidfield_2(self):
+        field = UUIDField(required=False)
+        value = field.clean('')
+        self.assertEqual(value, None)
+
+    def test_uuidfield_3(self):
+        field = UUIDField()
+        with self.assertRaises(ValidationError) as cm:
+            field.clean('550e8400')
+        self.assertEqual(cm.exception.messages[0], 'Enter a valid UUID.')
+
+    def test_uuidfield_4(self):
+        field = UUIDField()
+        value = field.prepare_value(uuid.UUID('550e8400e29b41d4a716446655440000'))
+        self.assertEqual(value, '550e8400e29b41d4a716446655440000')

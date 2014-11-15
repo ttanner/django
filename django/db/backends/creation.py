@@ -8,7 +8,6 @@ from django.utils.encoding import force_bytes
 from django.utils.functional import cached_property
 from django.utils.six.moves import input
 from django.utils.six import StringIO
-from django.core.management.commands.dumpdata import sort_dependencies
 from django.db import router
 from django.apps import apps
 from django.core import serializers
@@ -77,7 +76,10 @@ class BaseDatabaseCreation(object):
         pending_references = {}
         qn = self.connection.ops.quote_name
         for f in opts.local_fields:
-            col_type = f.db_type(connection=self.connection)
+            db_params = f.db_parameters(connection=self.connection)
+            col_type = db_params['type']
+            if db_params['check']:
+                col_type = '%s CHECK (%s)' % (col_type, db_params['check'])
             col_type_suffix = f.db_type_suffix(connection=self.connection)
             tablespace = f.db_tablespace or opts.db_tablespace
             if col_type is None:
@@ -422,8 +424,9 @@ class BaseDatabaseCreation(object):
 
         # Make a function to iteratively return every object
         def get_objects():
-            for model in sort_dependencies(app_list):
-                if not model._meta.proxy and model._meta.managed and router.allow_migrate(self.connection.alias, model):
+            for model in serializers.sort_dependencies(app_list):
+                if (not model._meta.proxy and model._meta.managed and
+                        router.allow_migrate(self.connection.alias, model)):
                     queryset = model._default_manager.using(self.connection.alias).order_by(model._meta.pk.name)
                     for obj in queryset.iterator():
                         yield obj
@@ -520,6 +523,10 @@ class BaseDatabaseCreation(object):
         # skip the actual destroying piece.
         if not keepdb:
             self._destroy_test_db(test_database_name, verbosity)
+
+        # Restore the original database name
+        settings.DATABASES[self.connection.alias]["NAME"] = old_database_name
+        self.connection.settings_dict["NAME"] = old_database_name
 
     def _destroy_test_db(self, test_database_name, verbosity):
         """

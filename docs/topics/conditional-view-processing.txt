@@ -50,7 +50,7 @@ must be computed and your normal view is called.
 
 The ``condition`` decorator's signature looks like this::
 
-    condition(etag_func=None, last_modified_func=None)
+    condition(etag_func=None, last_modified_func=None, update=("DELETE", "PATCH", "POST", "PUT"))
 
 The two functions, to compute the ETag and the last modified time, will be
 passed the incoming ``request`` object and the same parameters, in the same
@@ -90,6 +90,10 @@ for your front page view::
     @condition(last_modified_func=latest_entry)
     def front_page(request, blog_id):
         ...
+
+The ``update`` parameter specifies for which HTTP methods (default:
+"DELETE", "PATCH", "POST" and "PUT") the response header should be
+updated with the latest values. Otherwise the initial values are kept.
 
 Shortcuts for only computing one value
 ======================================

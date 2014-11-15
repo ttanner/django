@@ -955,7 +955,7 @@ class ContextTests(TestCase):
         "Context variables can be retrieved from a single context"
         response = self.client.get("/request_data/", data={'foo': 'whiz'})
         self.assertEqual(response.context.__class__, Context)
-        self.assertTrue('get-foo' in response.context)
+        self.assertIn('get-foo', response.context)
         self.assertEqual(response.context['get-foo'], 'whiz')
         self.assertEqual(response.context['request-foo'], 'whiz')
         self.assertEqual(response.context['data'], 'sausage')
@@ -971,7 +971,7 @@ class ContextTests(TestCase):
         response = self.client.get("/request_data_extended/", data={'foo': 'whiz'})
         self.assertEqual(response.context.__class__, ContextList)
         self.assertEqual(len(response.context), 2)
-        self.assertTrue('get-foo' in response.context)
+        self.assertIn('get-foo', response.context)
         self.assertEqual(response.context['get-foo'], 'whiz')
         self.assertEqual(response.context['request-foo'], 'whiz')
         self.assertEqual(response.context['data'], 'bacon')
@@ -993,8 +993,8 @@ class ContextTests(TestCase):
         l = ContextList([c1, c2])
         # None, True and False are builtins of BaseContext, and present
         # in every Context without needing to be added.
-        self.assertEqual(set(['None', 'True', 'False', 'hello', 'goodbye',
-                              'python', 'dolly']),
+        self.assertEqual({'None', 'True', 'False', 'hello', 'goodbye',
+                          'python', 'dolly'},
                          l.keys())
 
     def test_15368(self):
@@ -1227,6 +1227,16 @@ class RequestMethodStringDataTests(TestCase):
         response = self.client.patch('/request_methods/', data=data, content_type='application/json')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b'request method: PATCH')
+
+    def test_empty_string_data(self):
+        "Request a view with empty string data via request method GET/POST/HEAD"
+        # Regression test for #21740
+        response = self.client.get('/body/', data='', content_type='application/json')
+        self.assertEqual(response.content, b'')
+        response = self.client.post('/body/', data='', content_type='application/json')
+        self.assertEqual(response.content, b'')
+        response = self.client.head('/body/', data='', content_type='application/json')
+        self.assertEqual(response.content, b'')
 
 
 @override_settings(ROOT_URLCONF='test_client_regress.urls',)

@@ -48,7 +48,7 @@ class ConditionalGet(TestCase):
         response = self.client.get('/condition/')
         self.assertFullResponse(response)
         response = self.client.put('/condition/static/')
-        self.assertFullResponse(response,modified=True)
+        self.assertFullResponse(response, modified=True)
         response = self.client.put('/condition/')
         self.assertModifiedResponse(response)
 
@@ -200,6 +200,11 @@ class ConditionalGet(TestCase):
         self.assertEqual(response.status_code, 412)
         response = self.client.get('/condition/etag2/')
         self.assertFullResponse(response, check_last_modified=False)
+
+    def test_single_condition_head(self):
+        self.client.defaults['HTTP_IF_MODIFIED_SINCE'] = LAST_MODIFIED_STR
+        response = self.client.head('/condition/')
+        self.assertNotModified(response)
 
     def test_invalid_etag(self):
         self.client.defaults['HTTP_IF_NONE_MATCH'] = r'"\"'

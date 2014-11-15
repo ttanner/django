@@ -35,6 +35,19 @@ class RequestsTests(SimpleTestCase):
         # and FILES should be MultiValueDict
         self.assertEqual(request.FILES.getlist('foo'), [])
 
+    def test_httprequest_full_path(self):
+        request = HttpRequest()
+        request.path = request.path_info = '/;some/?awful/=path/foo:bar/'
+        request.META['QUERY_STRING'] = ';some=query&+query=string'
+        expected = '/%3Bsome/%3Fawful/%3Dpath/foo:bar/?;some=query&+query=string'
+        self.assertEqual(request.get_full_path(), expected)
+
+    def test_httprequest_full_path_with_query_string_and_fragment(self):
+        request = HttpRequest()
+        request.path = request.path_info = '/foo#bar'
+        request.META['QUERY_STRING'] = 'baz#quux'
+        self.assertEqual(request.get_full_path(), '/foo%23bar?baz#quux')
+
     def test_httprequest_repr(self):
         request = HttpRequest()
         request.path = '/somepath/'
@@ -68,7 +81,7 @@ class RequestsTests(SimpleTestCase):
         self.assertEqual(list(request.GET.keys()), [])
         self.assertEqual(list(request.POST.keys()), [])
         self.assertEqual(list(request.COOKIES.keys()), [])
-        self.assertEqual(set(request.META.keys()), set(['PATH_INFO', 'REQUEST_METHOD', 'SCRIPT_NAME', 'wsgi.input']))
+        self.assertEqual(set(request.META.keys()), {'PATH_INFO', 'REQUEST_METHOD', 'SCRIPT_NAME', 'wsgi.input'})
         self.assertEqual(request.META['PATH_INFO'], 'bogus')
         self.assertEqual(request.META['REQUEST_METHOD'], 'bogus')
         self.assertEqual(request.META['SCRIPT_NAME'], '')
@@ -191,7 +204,7 @@ class RequestsTests(SimpleTestCase):
         example_cookie = response.cookies['example']
         # A compat cookie may be in use -- check that it has worked
         # both as an output string, and using the cookie attributes
-        self.assertTrue('; httponly' in str(example_cookie))
+        self.assertIn('; httponly', str(example_cookie))
         self.assertTrue(example_cookie['httponly'])
 
     def test_unicode_cookie(self):

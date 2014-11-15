@@ -12,7 +12,7 @@ from django.apps import apps
 from django.conf import settings
 from django.core import urlresolvers
 from django.core.handlers.base import BaseHandler
-from django.core.handlers.wsgi import WSGIRequest
+from django.core.handlers.wsgi import WSGIRequest, ISO_8859_1, UTF_8
 from django.core.signals import (request_started, request_finished,
     got_request_exception)
 from django.db import close_old_connections
@@ -20,11 +20,11 @@ from django.http import SimpleCookie, HttpRequest, QueryDict
 from django.template import TemplateDoesNotExist
 from django.test import signals
 from django.utils.functional import curry, SimpleLazyObject
-from django.utils.encoding import force_bytes, force_str
+from django.utils.encoding import force_bytes, force_str, uri_to_iri
 from django.utils.http import urlencode
 from django.utils.itercompat import is_iterable
 from django.utils import six
-from django.utils.six.moves.urllib.parse import unquote, urlparse, urlsplit
+from django.utils.six.moves.urllib.parse import urlparse, urlsplit
 from django.test.utils import ContextList
 
 __all__ = ('Client', 'RequestFactory', 'encode_file', 'encode_multipart')
@@ -270,17 +270,18 @@ class RequestFactory(object):
         # If there are parameters, add them
         if parsed[3]:
             path += str(";") + force_str(parsed[3])
-        path = unquote(path)
-        # WSGI requires latin-1 encoded strings. See get_path_info().
-        if six.PY3:
-            path = path.encode('utf-8').decode('iso-8859-1')
-        return path
+        path = uri_to_iri(path).encode(UTF_8)
+        # Under Python 3, non-ASCII values in the WSGI environ are arbitrarily
+        # decoded with ISO-8859-1. We replicate this behavior here.
+        # Refs comment in `get_bytes_from_wsgi()`.
+        return path.decode(ISO_8859_1) if six.PY3 else path
 
     def get(self, path, data=None, secure=False, **extra):
         "Construct a GET request."
 
+        data = {} if data is None else data
         r = {
-            'QUERY_STRING': urlencode(data or {}, doseq=True),
+            'QUERY_STRING': urlencode(data, doseq=True),
         }
         r.update(extra)
         return self.generic('GET', path, secure=secure, **r)
@@ -289,7 +290,8 @@ class RequestFactory(object):
              secure=False, **extra):
         "Construct a POST request."
 
-        post_data = self._encode_data(data or {}, content_type)
+        data = {} if data is None else data
+        post_data = self._encode_data(data, content_type)
 
         return self.generic('POST', path, post_data, content_type,
                             secure=secure, **extra)
@@ -297,11 +299,16 @@ class RequestFactory(object):
     def head(self, path, data=None, secure=False, **extra):
         "Construct a HEAD request."
 
+        data = {} if data is None else data
         r = {
-            'QUERY_STRING': urlencode(data or {}, doseq=True),
+            'QUERY_STRING': urlencode(data, doseq=True),
         }
         r.update(extra)
         return self.generic('HEAD', path, secure=secure, **r)
+
+    def trace(self, path, secure=False, **extra):
+        "Construct a TRACE request."
+        return self.generic('TRACE', path, secure=secure, **extra)
 
     def options(self, path, data='', content_type='application/octet-stream',
                 secure=False, **extra):
@@ -545,6 +552,15 @@ class Client(RequestFactory):
         response = super(Client, self).delete(path, data=data,
                                               content_type=content_type,
                                               secure=secure, **extra)
+        if follow:
+            response = self._handle_redirects(response, **extra)
+        return response
+
+    def trace(self, path, data='', follow=False, secure=False, **extra):
+        """
+        Send a TRACE request to the server.
+        """
+        response = super(Client, self).trace(path, data=data, secure=secure, **extra)
         if follow:
             response = self._handle_redirects(response, **extra)
         return response

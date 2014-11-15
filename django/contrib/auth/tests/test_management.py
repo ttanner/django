@@ -121,7 +121,10 @@ class ChangepasswordManagementCommandTestCase(TestCase):
         command.execute(username="joe", stdout=self.stdout)
         command_output = self.stdout.getvalue().strip()
 
-        self.assertEqual(command_output, "Changing password for user 'joe'\nPassword changed successfully for user 'joe'")
+        self.assertEqual(
+            command_output,
+            "Changing password for user 'joe'\nPassword changed successfully for user 'joe'"
+        )
         self.assertTrue(models.User.objects.get(username="joe").check_password("not qwerty"))
 
     def test_that_max_tries_exits_1(self):
@@ -271,7 +274,6 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
             email="joe@somewhere.org",
             date_of_birth="1976-04-01",
             stdout=new_io,
-            skip_checks=True
         )
         command_output = new_io.getvalue().strip()
         self.assertEqual(command_output, 'Superuser created successfully.')
@@ -295,7 +297,6 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
                 username="joe@somewhere.org",
                 stdout=new_io,
                 stderr=new_io,
-                skip_checks=True
             )
 
         self.assertEqual(CustomUser._default_manager.count(), 0)
@@ -361,7 +362,6 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
             email=email.email,
             group=group.pk,
             stdout=new_io,
-            skip_checks=True,
         )
         command_output = new_io.getvalue().strip()
         self.assertEqual(command_output, 'Superuser created successfully.')
@@ -378,7 +378,6 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
                 username=email.pk,
                 email=non_existent_email,
                 stdout=new_io,
-                skip_checks=True,
             )
 
     @override_settings(AUTH_USER_MODEL='auth.CustomUserWithFK')
@@ -399,7 +398,6 @@ class CreatesuperuserManagementCommandTestCase(TestCase):
                 interactive=True,
                 stdout=new_io,
                 stdin=MockTTY(),
-                skip_checks=True,
             )
 
             command_output = new_io.getvalue().strip()

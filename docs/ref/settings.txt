@@ -18,7 +18,8 @@ Core settings
 
 Here's a list of settings available in Django core and their default values.
 Settings provided by contrib apps are listed below, followed by a topical index
-of the core settings.
+of the core settings. For introductory material, see the :doc:`settings topic
+guide </topics/settings>`.
 
 .. setting:: ABSOLUTE_URL_OVERRIDES
 
@@ -28,7 +29,7 @@ ABSOLUTE_URL_OVERRIDES
 Default: ``{}`` (Empty dictionary)
 
 A dictionary mapping ``"app_label.model_name"`` strings to functions that take
-a model object and return its URL. This is a way of overriding
+a model object and return its URL. This is a way of inserting or overriding
 ``get_absolute_url()`` methods on a per-installation basis. Example::
 
     ABSOLUTE_URL_OVERRIDES = {
@@ -38,6 +39,11 @@ a model object and return its URL. This is a way of overriding
 
 Note that the model name used in this setting should be all lower-case, regardless
 of the case of the actual model class name.
+
+.. versionchanged:: 1.7.1
+
+    ``ABSOLUTE_URL_OVERRIDES`` now works on models that don't declare
+    ``get_absolute_url()``.
 
 .. setting:: ADMINS
 
@@ -352,6 +358,12 @@ Default: ``False``
 
 Whether to use ``HttpOnly`` flag on the CSRF cookie. If this is set to
 ``True``, client-side JavaScript will not to be able to access the CSRF cookie.
+
+This can help prevent malicious JavaScript from bypassing CSRF protection. If
+you enable this and need to send the value of the CSRF token with Ajax requests,
+your JavaScript will need to pull the value from a hidden CSRF token form input
+on the page instead of from the cookie.
+
 See :setting:`SESSION_COOKIE_HTTPONLY` for details on ``HttpOnly``.
 
 .. setting:: CSRF_COOKIE_NAME
@@ -362,7 +374,7 @@ CSRF_COOKIE_NAME
 Default: ``'csrftoken'``
 
 The name of the cookie to use for the CSRF authentication token. This can be whatever you
-want.  See :doc:`/ref/contrib/csrf`.
+want.  See :doc:`/ref/csrf`.
 
 .. setting:: CSRF_COOKIE_PATH
 
@@ -403,7 +415,7 @@ is rejected by the CSRF protection.  The function should have this signature::
 
 where ``reason`` is a short message (intended for developers or logging, not for
 end users) indicating the reason the request was rejected.  See
-:doc:`/ref/contrib/csrf`.
+:doc:`/ref/csrf`.
 
 .. setting:: DATABASES
 
@@ -672,6 +684,19 @@ test database will use the name ``'test_' + DATABASE_NAME``.
 
 See :ref:`the-test-database`.
 
+.. setting:: TEST_SERIALIZE
+
+SERIALIZE
+^^^^^^^^^
+
+.. versionadded:: 1.7.1
+
+Boolean value to control whether or not the default test runner serializes the
+database into an in-memory JSON string before running tests (used to restore
+the database state between tests if you don't have transactions). You can set
+this to ``False`` to speed up creation time if you don't have any test classes
+with :ref:`serialized_rollback=True <test-case-serialized-rollback>`.
+
 .. setting:: TEST_CREATE
 
 CREATE_DB
@@ -730,7 +755,11 @@ Default: ``None``
 This is an Oracle-specific setting.
 
 The name of the tablespace that will be used when running tests. If not
-provided, Django will use ``'test_' + NAME``.
+provided, Django will use ``'test_' + USER``.
+
+.. versionchanged:: 1.8
+
+    Previously Django used ``'test_' + NAME`` if not provided.
 
 .. setting:: TEST_TBLSPACE_TMP
 
@@ -742,7 +771,73 @@ Default: ``None``
 This is an Oracle-specific setting.
 
 The name of the temporary tablespace that will be used when running tests. If
-not provided, Django will use ``'test_' + NAME + '_temp'``.
+not provided, Django will use ``'test_' + USER + '_temp'``.
+
+.. versionchanged:: 1.8
+
+    Previously Django used ``'test_' + NAME + '_temp'`` if not provided.
+
+.. setting:: DATAFILE
+
+DATAFILE
+^^^^^^^^
+
+.. versionadded:: 1.8
+
+Default: ``None``
+
+This is an Oracle-specific setting.
+
+The name of the datafile to use for the TBLSPACE. If not provided, Django will
+use ``TBLSPACE + '.dbf'``.
+
+.. setting:: DATAFILE_TMP
+
+DATAFILE_TMP
+^^^^^^^^^^^^
+
+.. versionadded:: 1.8
+
+Default: ``None``
+
+This is an Oracle-specific setting.
+
+The name of the datafile to use for the TBLSPACE_TMP. If not provided, Django
+will use ``TBLSPACE_TMP + '.dbf'``.
+
+.. setting:: DATAFILE_MAXSIZE
+
+DATAFILE_MAXSIZE
+^^^^^^^^^^^^^^^^
+
+.. versionadded:: 1.8
+
+Default: ``'500M'``
+
+.. versionchanged:: 1.8
+
+    The previous value was 200M and was not user customizable.
+
+This is an Oracle-specific setting.
+
+The maximum size that the DATAFILE is allowed to grow to.
+
+.. setting:: DATAFILE_TMP_MAXSIZE
+
+DATAFILE_TMP_MAXSIZE
+^^^^^^^^^^^^^^^^^^^^
+
+.. versionadded:: 1.8
+
+Default: ``'500M'``
+
+.. versionchanged:: 1.8
+
+    The previous value was 200M and was not user customizable.
+
+This is an Oracle-specific setting.
+
+The maximum size that the DATAFILE_TMP is allowed to grow to.
 
 .. setting:: OLD_TEST_CHARSET
 
@@ -1223,6 +1318,50 @@ see the explicit TLS setting :setting:`EMAIL_USE_TLS`.
 Note that :setting:`EMAIL_USE_TLS`/:setting:`EMAIL_USE_SSL` are mutually
 exclusive, so only set one of those settings to ``True``.
 
+.. setting:: EMAIL_SSL_CERTFILE
+
+EMAIL_SSL_CERTFILE
+------------------
+
+.. versionadded:: 1.8
+
+Default: ``None``
+
+If :setting:`EMAIL_USE_SSL` or :setting:`EMAIL_USE_TLS` is ``True``, you can
+optionally specify the path to a PEM-formatted certificate chain file to use
+for the SSL connection.
+
+.. setting:: EMAIL_SSL_KEYFILE
+
+EMAIL_SSL_KEYFILE
+-----------------
+
+.. versionadded:: 1.8
+
+Default: ``None``
+
+If :setting:`EMAIL_USE_SSL` or :setting:`EMAIL_USE_TLS` is ``True``, you can
+optionally specify the path to a PEM-formatted private key file to use for the
+SSL connection.
+
+Note that setting :setting:`EMAIL_SSL_CERTFILE` and :setting:`EMAIL_SSL_KEYFILE`
+doesn't result in any certificate checking. They're passed to the underlying SSL
+connection. Please refer to the documentation of Python's
+:func:`python:ssl.wrap_socket` function for details on how the certificate chain
+file and private key file are handled.
+
+.. setting:: EMAIL_TIMEOUT
+
+EMAIL_TIMEOUT
+-------------
+
+.. versionadded:: 1.8
+
+Default: ``None``
+
+Specifies a timeout in seconds for blocking operations like the connection
+attempt.
+
 .. setting:: FILE_CHARSET
 
 FILE_CHARSET
@@ -1541,7 +1680,7 @@ standard domain cookies, existing user cookies that have the old domain
 will not be updated. This will result in site users being unable to switch
 the language as long as these cookies persist. The only safe and reliable
 option to perform the switch is to change the language cookie name
-permanently (via the :setting:`SESSION_COOKIE_NAME` setting) and to add
+permanently (via the :setting:`LANGUAGE_COOKIE_NAME` setting) and to add
 a middleware that copies the value from the old cookie to a new one and then
 deletes the old one.
 
@@ -1577,7 +1716,7 @@ setting to use a deeper path than it previously used, existing user cookies that
 have the old path will not be updated. This will result in site users being
 unable to switch the language as long as these cookies persist. The only safe
 and reliable option to perform the switch is to change the language cookie name
-permanently (via the :setting:`SESSION_COOKIE_NAME` setting), and to add
+permanently (via the :setting:`LANGUAGE_COOKIE_NAME` setting), and to add
 a middleware that copies the value from the old cookie to a new one and then
 deletes the one.
 
@@ -1794,6 +1933,9 @@ drilldown, the header for a given day displays the day and month. Different
 locales have different formats. For example, U.S. English would say
 "January 1," whereas Spanish might say "1 Enero."
 
+Note that if :setting:`USE_L10N` is set to ``True``, then the corresponding
+locale-dictated format has higher precedence and will be applied.
+
 See :tfilter:`allowed date format strings <date>`. See also
 :setting:`DATE_FORMAT`, :setting:`DATETIME_FORMAT`,
 :setting:`TIME_FORMAT` and :setting:`YEAR_MONTH_FORMAT`.
@@ -1865,6 +2007,90 @@ Django will refuse to start if :setting:`SECRET_KEY` is not set.
     security protections, and can lead to privilege escalation and remote code
     execution vulnerabilities.
 
+The secret key is used for:
+
+* All :doc:`sessions </topics/http/sessions>` if you are using
+  any other session backend than ``django.contrib.sessions.backends.cache``,
+  or if you use
+  :class:`~django.contrib.auth.middleware.SessionAuthenticationMiddleware`
+  and are using the default
+  :meth:`~django.contrib.auth.models.AbstractBaseUser.get_session_auth_hash()`.
+* All :doc:`messages </ref/contrib/messages>` if you are using
+  :class:`~django.contrib.messages.storage.cookie.CookieStorage` or
+  :class:`~django.contrib.messages.storage.fallback.FallbackStorage`.
+* :doc:`Form wizard </ref/contrib/formtools/form-wizard>` progress when using
+  cookie storage with
+  :class:`django.contrib.formtools.wizard.views.CookieWizardView`.
+* All :func:`~django.contrib.auth.views.password_reset` tokens.
+* All in progress :doc:`form previews </ref/contrib/formtools/form-preview>`.
+* Any usage of :doc:`cryptographic signing </topics/signing>`, unless a
+  different key is provided.
+
+If you rotate your secret key, all of the above will be invalidated.
+Secret keys are not used for passwords of users and key rotation will not
+affect them.
+
+.. setting:: SECURE_BROWSER_XSS_FILTER
+
+SECURE_BROWSER_XSS_FILTER
+-------------------------
+
+.. versionadded:: 1.8
+
+Default: ``False``
+
+If ``True``, the :class:`~django.middleware.security.SecurityMiddleware` sets
+the :ref:`x-xss-protection` header on all responses that do not already have it.
+
+.. setting:: SECURE_CONTENT_TYPE_NOSNIFF
+
+SECURE_CONTENT_TYPE_NOSNIFF
+---------------------------
+
+.. versionadded:: 1.8
+
+Default: ``False``
+
+If ``True``, the :class:`~django.middleware.security.SecurityMiddleware`
+sets the :ref:`x-content-type-options` header on all responses that do not
+already have it.
+
+.. setting:: SECURE_HSTS_INCLUDE_SUBDOMAINS
+
+SECURE_HSTS_INCLUDE_SUBDOMAINS
+------------------------------
+
+.. versionadded:: 1.8
+
+Default: ``False``
+
+If ``True``, the :class:`~django.middleware.security.SecurityMiddleware` adds
+the ``includeSubDomains`` tag to the :ref:`http-strict-transport-security`
+header. It has no effect unless :setting:`SECURE_HSTS_SECONDS` is set to a
+non-zero value.
+
+.. warning::
+    Setting this incorrectly can irreversibly (for some time) break your site.
+    Read the :ref:`http-strict-transport-security` documentation first.
+
+.. setting:: SECURE_HSTS_SECONDS
+
+SECURE_HSTS_SECONDS
+-------------------
+
+.. versionadded:: 1.8
+
+Default: ``0``
+
+If set to a non-zero integer value, the
+:class:`~django.middleware.security.SecurityMiddleware` sets the
+:ref:`http-strict-transport-security` header on all responses that do not
+already have it.
+
+.. warning::
+    Setting this incorrectly can irreversibly (for some time) break your site.
+    Read the :ref:`http-strict-transport-security` documentation first.
+
 .. setting:: SECURE_PROXY_SSL_HEADER
 
 SECURE_PROXY_SSL_HEADER
@@ -1925,6 +2151,55 @@ available in ``request.META``.)
 
     If any of those are not true, you should keep this setting set to ``None``
     and find another way of determining HTTPS, perhaps via custom middleware.
+
+.. setting:: SECURE_REDIRECT_EXEMPT
+
+SECURE_REDIRECT_EXEMPT
+----------------------
+
+.. versionadded:: 1.8
+
+Default: ``[]``
+
+If a URL path matches a regular expression in this list, the request will not be
+redirected to HTTPS. If :setting:`SECURE_SSL_REDIRECT` is ``False``, this
+setting has no effect.
+
+.. setting:: SECURE_SSL_HOST
+
+SECURE_SSL_HOST
+---------------
+
+.. versionadded:: 1.8
+
+Default: ``None``
+
+If a string (e.g. ``secure.example.com``), all SSL redirects will be directed
+to this host rather than the originally-requested host
+(e.g. ``www.example.com``). If :setting:`SECURE_SSL_REDIRECT` is ``False``, this
+setting has no effect.
+
+.. setting:: SECURE_SSL_REDIRECT
+
+SECURE_SSL_REDIRECT
+-------------------
+
+.. versionadded:: 1.8
+
+Default: ``False``.
+
+If ``True``, the :class:`~django.middleware.security.SecurityMiddleware`
+:ref:`redirects <ssl-redirect>` all non-HTTPS requests to HTTPS (except for
+those URLs matching a regular expression listed in
+:setting:`SECURE_REDIRECT_EXEMPT`).
+
+.. note::
+
+   If turning this to ``True`` causes infinite redirects, it probably means
+   your site is running behind a proxy and can't tell which requests are secure
+   and which are not. Your proxy likely sets a header to indicate secure
+   requests; you can correct the problem by finding out what that header is and
+   configuring the :setting:`SECURE_PROXY_SSL_HEADER` setting accordingly.
 
 .. setting:: SERIALIZATION_MODULES
 
@@ -2084,7 +2359,7 @@ TEMPLATE_STRING_IF_INVALID
 Default: ``''`` (Empty string)
 
 Output, as a string, that the template system should use for invalid (e.g.
-misspelled) variables. See :ref:`invalid-template-variables`..
+misspelled) variables. See :ref:`invalid-template-variables`.
 
 .. setting:: TEST_RUNNER
 
@@ -2344,6 +2619,9 @@ For example, when a Django admin change-list page is being filtered by a date
 drilldown, the header for a given month displays the month and the year.
 Different locales have different formats. For example, U.S. English would say
 "January 2006," whereas another locale might say "2006/January."
+
+Note that if :setting:`USE_L10N` is set to ``True``, then the corresponding
+locale-dictated format has higher precedence and will be applied.
 
 See :tfilter:`allowed date format strings <date>`. See also
 :setting:`DATE_FORMAT`, :setting:`DATETIME_FORMAT`, :setting:`TIME_FORMAT`
@@ -2605,6 +2883,11 @@ consistently by all browsers. However, when it is honored, it can be a
 useful way to mitigate the risk of client side script accessing the
 protected cookie data.
 
+Turning it on makes it less trivial for an attacker to escalate a cross-site
+scripting vulnerability into full hijacking of a user's session. There's not
+much excuse for leaving this off, either: if your code depends on reading
+session cookies from Javascript, you're probably doing it wrong.
+
 .. versionadded:: 1.7
 
 This setting also affects cookies set by :mod:`django.contrib.messages`.
@@ -2645,6 +2928,13 @@ Default: ``False``
 Whether to use a secure cookie for the session cookie. If this is set to
 ``True``, the cookie will be marked as "secure," which means browsers may
 ensure that the cookie is only sent under an HTTPS connection.
+
+Since it's trivial for a packet sniffer (e.g. `Firesheep`_) to hijack a user's
+session if the session cookie is sent unencrypted, there's really no good
+excuse to leave this off. It will prevent you from using sessions on insecure
+requests and that's a good thing.
+
+.. _Firesheep: http://codebutler.com/firesheep
 
 .. versionadded:: 1.7
 
@@ -2921,7 +3211,10 @@ Email
 * :setting:`EMAIL_HOST_PASSWORD`
 * :setting:`EMAIL_HOST_USER`
 * :setting:`EMAIL_PORT`
+* :setting:`EMAIL_SSL_CERTFILE`
+* :setting:`EMAIL_SSL_KEYFILE`
 * :setting:`EMAIL_SUBJECT_PREFIX`
+* :setting*`EMAIL_TIMEOUT`
 * :setting:`EMAIL_USE_TLS`
 * :setting:`MANAGERS`
 * :setting:`SERVER_EMAIL`
@@ -2984,7 +3277,16 @@ HTTP
 * :setting:`FORCE_SCRIPT_NAME`
 * :setting:`INTERNAL_IPS`
 * :setting:`MIDDLEWARE_CLASSES`
-* :setting:`SECURE_PROXY_SSL_HEADER`
+* Security
+
+  * :setting:`SECURE_BROWSER_XSS_FILTER`
+  * :setting:`SECURE_CONTENT_TYPE_NOSNIFF`
+  * :setting:`SECURE_HSTS_INCLUDE_SUBDOMAINS`
+  * :setting:`SECURE_HSTS_SECONDS`
+  * :setting:`SECURE_PROXY_SSL_HEADER`
+  * :setting:`SECURE_REDIRECT_EXEMPT`
+  * :setting:`SECURE_SSL_HOST`
+  * :setting:`SECURE_SSL_REDIRECT`
 * :setting:`SIGNING_BACKEND`
 * :setting:`USE_ETAGS`
 * :setting:`USE_X_FORWARDED_HOST`

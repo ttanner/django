@@ -106,8 +106,18 @@ class ClassDecoratedTestCaseSuper(TestCase):
 
 @override_settings(TEST='override')
 class ClassDecoratedTestCase(ClassDecoratedTestCaseSuper):
+
+    @classmethod
+    def setUpClass(cls):
+        super(cls, ClassDecoratedTestCase).setUpClass()
+        cls.foo = getattr(settings, 'TEST', 'BUG')
+
     def test_override(self):
         self.assertEqual(settings.TEST, 'override')
+
+    def test_setupclass_override(self):
+        """Test that settings are overriden within setUpClass -- refs #21281"""
+        self.assertEqual(self.foo, 'override')
 
     @override_settings(TEST='override2')
     def test_method_override(self):
@@ -273,63 +283,6 @@ class SettingsTests(TestCase):
         self.assertRaises(ValueError, setattr, settings,
             'ALLOWED_INCLUDE_ROOTS', '/var/www/ssi/')
 
-    def test_dict_setting(self):
-        """
-        Test that dictionary-type settings can be "complemented", that is existing
-        setting keys/values are not overriden by user settings, but merged into the
-        existing dict.
-        """
-        s = LazySettings()  # Start with fresh settings from global_settings.py
-        # Simply overwriting the key
-        s.configure(CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}})
-        self.assertEqual(s.CACHES['default']['BACKEND'],
-                         'django.core.cache.backends.dummy.DummyCache')
-
-        s = LazySettings()
-        # More complex overwriting
-        s.configure(CACHES={
-            'default': {'LOCATION': 'unique-snowflake'},
-            'temp': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}
-        })
-        self.assertDictEqual(s.CACHES, {
-            'default': {
-                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-                'LOCATION': 'unique-snowflake'
-            },
-            'temp': {
-                'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
-            }
-        })
-
-    def test_dict_setting_clear_defaults(self):
-        """
-        Test the ability to deactivate the merge feature of dictionary settings.
-        """
-        s = LazySettings()
-        s.configure(CACHES={
-            '_clear_defaults': True,
-            'temp': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}
-        })
-        self.assertDictEqual(s.CACHES, {
-            '_clear_defaults': True,
-            'temp': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}
-        })
-
-        # Also work on a subkey
-        s = LazySettings()
-        s.configure(CACHES={
-            'default': {
-                '_clear_defaults': True,
-                'LOCATION': 'unique-snowflake',
-            }
-        })
-        self.assertDictEqual(s.CACHES, {
-            'default': {
-                '_clear_defaults': True,
-                'LOCATION': 'unique-snowflake',
-            }
-        })
-
 
 class TestComplexSettingOverride(TestCase):
     def setUp(self):
@@ -338,7 +291,7 @@ class TestComplexSettingOverride(TestCase):
 
     def tearDown(self):
         signals.COMPLEX_OVERRIDE_SETTINGS = self.old_warn_override_settings
-        self.assertFalse('TEST_WARN' in signals.COMPLEX_OVERRIDE_SETTINGS)
+        self.assertNotIn('TEST_WARN', signals.COMPLEX_OVERRIDE_SETTINGS)
 
     def test_complex_override_warning(self):
         """Regression test for #19031"""
@@ -423,18 +376,18 @@ class TrailingSlashURLTests(TestCase):
         If the value ends in more than one slash, presume they know what
         they're doing.
         """
-        self.settings_module.MEDIA_URL = '/stupid//'
-        self.assertEqual('/stupid//', self.settings_module.MEDIA_URL)
+        self.settings_module.MEDIA_URL = '/wrong//'
+        self.assertEqual('/wrong//', self.settings_module.MEDIA_URL)
 
-        self.settings_module.MEDIA_URL = 'http://media.foo.com/stupid//'
-        self.assertEqual('http://media.foo.com/stupid//',
+        self.settings_module.MEDIA_URL = 'http://media.foo.com/wrong//'
+        self.assertEqual('http://media.foo.com/wrong//',
                          self.settings_module.MEDIA_URL)
 
-        self.settings_module.STATIC_URL = '/stupid//'
-        self.assertEqual('/stupid//', self.settings_module.STATIC_URL)
+        self.settings_module.STATIC_URL = '/wrong//'
+        self.assertEqual('/wrong//', self.settings_module.STATIC_URL)
 
-        self.settings_module.STATIC_URL = 'http://static.foo.com/stupid//'
-        self.assertEqual('http://static.foo.com/stupid//',
+        self.settings_module.STATIC_URL = 'http://static.foo.com/wrong//'
+        self.assertEqual('http://static.foo.com/wrong//',
                          self.settings_module.STATIC_URL)
 
 

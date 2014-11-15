@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import sys
 from importlib import import_module
 
@@ -73,7 +75,8 @@ Are you sure you want to do this?
                     "  * The database isn't running or isn't configured correctly.\n"
                     "  * At least one of the expected database tables doesn't exist.\n"
                     "  * The SQL was invalid.\n"
-                    "Hint: Look at the output of 'django-admin sqlflush'. That's the SQL this command wasn't able to run.\n"
+                    "Hint: Look at the output of 'django-admin sqlflush'. "
+                    "That's the SQL this command wasn't able to run.\n"
                     "The full error: %s") % (connection.settings_dict['NAME'], e)
                 six.reraise(CommandError, CommandError(new_msg), sys.exc_info()[2])
 
@@ -82,9 +85,13 @@ Are you sure you want to do this?
 
             # Reinstall the initial_data fixture.
             if options.get('load_initial_data'):
-                # Reinstall the initial_data fixture.
-                call_command('loaddata', 'initial_data', **options)
-
+                # Reinstall the initial_data fixture for apps without migrations.
+                from django.db.migrations.executor import MigrationExecutor
+                executor = MigrationExecutor(connection)
+                app_options = options.copy()
+                for app_label in executor.loader.unmigrated_apps:
+                    app_options['app_label'] = app_label
+                    call_command('loaddata', 'initial_data', **app_options)
         else:
             self.stdout.write("Flush cancelled.\n")
 

@@ -315,7 +315,8 @@ class GEOSTest(unittest.TestCase, TestDataMixin):
             self.assertEqual(ls, LineString(ls.tuple))  # tuple
             self.assertEqual(ls, LineString(*ls.tuple))  # as individual arguments
             self.assertEqual(ls, LineString([list(tup) for tup in ls.tuple]))  # as list
-            self.assertEqual(ls.wkt, LineString(*tuple(Point(tup) for tup in ls.tuple)).wkt)  # Point individual arguments
+            # Point individual arguments
+            self.assertEqual(ls.wkt, LineString(*tuple(Point(tup) for tup in ls.tuple)).wkt)
             if numpy:
                 self.assertEqual(ls, LineString(numpy.array(ls.tuple)))  # as numpy array
 
@@ -435,17 +436,13 @@ class GEOSTest(unittest.TestCase, TestDataMixin):
     def test_polygon_comparison(self):
         p1 = Polygon(((0, 0), (0, 1), (1, 1), (1, 0), (0, 0)))
         p2 = Polygon(((0, 0), (0, 1), (1, 0), (0, 0)))
-        self.assertTrue(p1 > p2)
-        self.assertFalse(p1 < p2)
-        self.assertFalse(p2 > p1)
-        self.assertTrue(p2 < p1)
+        self.assertGreater(p1, p2)
+        self.assertLess(p2, p1)
 
         p3 = Polygon(((0, 0), (0, 1), (1, 1), (2, 0), (0, 0)))
         p4 = Polygon(((0, 0), (0, 1), (2, 2), (1, 0), (0, 0)))
-        self.assertFalse(p4 < p3)
-        self.assertTrue(p3 < p4)
-        self.assertTrue(p4 > p3)
-        self.assertFalse(p3 > p4)
+        self.assertGreater(p4, p3)
+        self.assertLess(p3, p4)
 
     def test_multipolygons(self):
         "Testing MultiPolygon objects."
@@ -652,7 +649,10 @@ class GEOSTest(unittest.TestCase, TestDataMixin):
 
         # Test conversion from custom to a known srid
         c2w = gdal.CoordTransform(
-            gdal.SpatialReference('+proj=mill +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +R_A +ellps=WGS84 +datum=WGS84 +units=m +no_defs'),
+            gdal.SpatialReference(
+                '+proj=mill +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +R_A +ellps=WGS84 '
+                '+datum=WGS84 +units=m +no_defs'
+            ),
             gdal.SpatialReference(4326))
         new_pnt = pnt.transform(c2w, clone=True)
         self.assertEqual(new_pnt.srid, 4326)
@@ -907,7 +907,7 @@ class GEOSTest(unittest.TestCase, TestDataMixin):
             g1 = g.transform(4326, clone=True)
             self.assertEqual(g1.tuple, g.tuple)
             self.assertEqual(g1.srid, 4326)
-            self.assertTrue(g1 is not g, "Clone didn't happen")
+            self.assertIsNot(g1, g, "Clone didn't happen")
 
         old_has_gdal = gdal.HAS_GDAL
         try:
@@ -923,7 +923,7 @@ class GEOSTest(unittest.TestCase, TestDataMixin):
             g1 = g.transform(4326, clone=True)
             self.assertEqual(g1.tuple, g.tuple)
             self.assertEqual(g1.srid, 4326)
-            self.assertTrue(g1 is not g, "Clone didn't happen")
+            self.assertIsNot(g1, g, "Clone didn't happen")
         finally:
             gdal.HAS_GDAL = old_has_gdal
 

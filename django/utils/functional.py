@@ -51,6 +51,7 @@ class cached_property(object):
     """
     def __init__(self, func, name=None):
         self.func = func
+        self.__doc__ = getattr(func, '__doc__')
         self.name = name or func.__name__
 
     def __get__(self, instance, type=None):
@@ -114,7 +115,8 @@ def lazy(func, *resultclasses):
                         setattr(cls, k, meth)
             cls._delegate_bytes = bytes in resultclasses
             cls._delegate_text = six.text_type in resultclasses
-            assert not (cls._delegate_bytes and cls._delegate_text), "Cannot call lazy() with both bytes and text return types."
+            assert not (cls._delegate_bytes and cls._delegate_text), (
+                "Cannot call lazy() with both bytes and text return types.")
             if cls._delegate_text:
                 if six.PY3:
                     cls.__str__ = cls.__text_cast

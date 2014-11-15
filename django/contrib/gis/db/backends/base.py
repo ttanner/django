@@ -16,6 +16,11 @@ class BaseSpatialFeatures(object):
     # Does the database contain a SpatialRefSys model to store SRID information?
     has_spatialrefsys_table = True
 
+    # Does the backend support the django.contrib.gis.utils.add_srs_entry() utility?
+    supports_add_srs_entry = True
+    # Does the backend introspect GeometryField to its subtypes?
+    supports_geometry_field_introspection = True
+
     # Reference implementation of 3D functions is:
     # http://postgis.net/docs/PostGIS_Special_Functions_Index.html#PostGIS_3D_Functions
     supports_3d_functions = False
@@ -37,19 +42,19 @@ class BaseSpatialFeatures(object):
 
     @property
     def supports_bbcontains_lookup(self):
-        return 'bbcontains' in self.connection.ops.gis_terms
+        return 'bbcontains' in self.connection.ops.gis_operators
 
     @property
     def supports_contained_lookup(self):
-        return 'contained' in self.connection.ops.gis_terms
+        return 'contained' in self.connection.ops.gis_operators
 
     @property
     def supports_dwithin_lookup(self):
-        return 'dwithin' in self.connection.ops.distance_functions
+        return 'dwithin' in self.connection.ops.gis_operators
 
     @property
     def supports_relate_lookup(self):
-        return 'relate' in self.connection.ops.gis_terms
+        return 'relate' in self.connection.ops.gis_operators
 
     # For each of those methods, the class will have a property named
     # `has_<name>_method` (defined in __init__) which accesses connection.ops
@@ -92,12 +97,6 @@ class BaseSpatialOperations(object):
     instantiated by each spatial database backend with the features
     it has.
     """
-    distance_functions = {}
-    geometry_functions = {}
-    geometry_operators = {}
-    geography_operators = {}
-    geography_functions = {}
-    gis_terms = set()
     truncate_params = {}
 
     # Quick booleans for the type of this spatial backend, and
@@ -187,7 +186,7 @@ class BaseSpatialOperations(object):
         """
         raise NotImplementedError('Distance operations not available on this spatial backend.')
 
-    def get_geom_placeholder(self, f, value):
+    def get_geom_placeholder(self, f, value, qn):
         """
         Returns the placeholder for the given geometry field with the given
         value.  Depending on the spatial backend, the placeholder may contain a
@@ -196,22 +195,9 @@ class BaseSpatialOperations(object):
         """
         raise NotImplementedError('subclasses of BaseSpatialOperations must provide a geo_db_placeholder() method')
 
-    def get_expression_column(self, evaluator):
-        """
-        Helper method to return the quoted column string from the evaluator
-        for its expression.
-        """
-        for expr, col_tup in evaluator.cols:
-            if expr is evaluator.expression:
-                return '%s.%s' % tuple(map(self.quote_name, col_tup))
-        raise Exception("Could not find the column for the expression.")
-
     # Spatial SQL Construction
     def spatial_aggregate_sql(self, agg):
         raise NotImplementedError('Aggregate support not implemented for this spatial backend.')
-
-    def spatial_lookup_sql(self, lvalue, lookup_type, value, field):
-        raise NotImplementedError('subclasses of BaseSpatialOperations must a provide spatial_lookup_sql() method')
 
     # Routines for getting the OGC-compliant models.
     def geometry_columns(self):
@@ -237,7 +223,12 @@ class SpatialRefSysMixin(object):
     # TODO: Figure out how to pull out angular units of projected coordinate system and
     # fix for LOCAL_CS types.  GDAL should be highly recommended for performing
     # distance queries.
-    units_regex = re.compile(r'.+UNIT ?\["(?P<unit_name>[\w \'\(\)]+)", ?(?P<unit>[\d\.]+)(,AUTHORITY\["(?P<unit_auth_name>[\w \'\(\)]+)","(?P<unit_auth_val>\d+)"\])?\]([\w ]+)?(,AUTHORITY\["(?P<auth_name>[\w \'\(\)]+)","(?P<auth_val>\d+)"\])?\]$')
+    units_regex = re.compile(
+        r'.+UNIT ?\["(?P<unit_name>[\w \'\(\)]+)", ?(?P<unit>[\d\.]+)'
+        r'(,AUTHORITY\["(?P<unit_auth_name>[\w \'\(\)]+)",'
+        r'"(?P<unit_auth_val>\d+)"\])?\]([\w ]+)?(,'
+        r'AUTHORITY\["(?P<auth_name>[\w \'\(\)]+)","(?P<auth_val>\d+)"\])?\]$'
+    )
 
     @property
     def srs(self):

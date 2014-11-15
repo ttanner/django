@@ -7,9 +7,9 @@ from django.core.exceptions import FieldError
 from django.db import connections
 from django.db.models.query_utils import Q
 from django.db.models.constants import LOOKUP_SEP
+from django.db.models.expressions import Date, DateTime, Col
 from django.db.models.fields import DateField, DateTimeField, FieldDoesNotExist
 from django.db.models.sql.constants import GET_ITERATOR_CHUNK_SIZE, NO_RESULTS, SelectInfo
-from django.db.models.sql.datastructures import Date, DateTime
 from django.db.models.sql.query import Query
 from django.utils import six
 from django.utils import timezone
@@ -128,7 +128,10 @@ class UpdateQuery(Query):
         for name, val in six.iteritems(values):
             field, model, direct, m2m = self.get_meta().get_field_by_name(name)
             if not direct or m2m:
-                raise FieldError('Cannot update model field %r (only non-relations and foreign keys permitted).' % field)
+                raise FieldError(
+                    'Cannot update model field %r (only non-relations and '
+                    'foreign keys permitted).' % field
+                )
             if model:
                 self.add_related_update(model, field, val)
                 continue
@@ -226,7 +229,7 @@ class DateQuery(Query):
             ))
         self._check_field(field)                # overridden in DateTimeQuery
         alias = joins[-1]
-        select = self._get_select((alias, field.column), lookup_type)
+        select = self._get_select(Col(alias, field), lookup_type)
         self.clear_select_clause()
         self.select = [SelectInfo(select, None)]
         self.distinct = True

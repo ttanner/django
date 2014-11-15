@@ -57,7 +57,7 @@ Conditional view processing
 The following decorators in :mod:`django.views.decorators.http` can be used to
 control caching behavior on particular views.
 
-.. function:: condition(etag_func=None, last_modified_func=None)
+.. function:: condition(etag_func=None, last_modified_func=None, update=("DELETE", "PATCH", "POST", "PUT"))
 
 .. function:: etag(etag_func)
 

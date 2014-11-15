@@ -70,7 +70,7 @@ csrf_token
 ^^^^^^^^^^
 
 This tag is used for CSRF protection, as described in the documentation for
-:doc:`Cross Site Request Forgeries </ref/contrib/csrf>`.
+:doc:`Cross Site Request Forgeries </ref/csrf>`.
 
 .. templatetag:: cycle
 
@@ -263,11 +263,11 @@ Sample usage::
 This is equivalent to::
 
     {% if var1 %}
-        {{ var1|safe }}
+        {{ var1 }}
     {% elif var2 %}
-        {{ var2|safe }}
+        {{ var2 }}
     {% elif var3 %}
-        {{ var3|safe }}
+        {{ var3 }}
     {% endif %}
 
 You can also use a literal string as a fallback value in case all
@@ -407,9 +407,7 @@ variables or to negate a given variable::
     {% endif %}
 
     {% if not athlete_list or coach_list %}
-        There are no athletes or there are some coaches (OK, so
-        writing English translations of boolean logic sounds
-        stupid; it's not our fault).
+        There are no athletes or there are some coaches.
     {% endif %}
 
     {% if athlete_list and not coach_list %}
@@ -702,6 +700,11 @@ available to the included template::
     This means that there is no shared state between included templates --
     each include is a completely independent rendering process.
 
+    Blocks are evaluated *before* they are included. This means that a template
+    that includes blocks from another will contain blocks that have *already
+    been evaluated and rendered* - not blocks that can be overridden by, for
+    example, an extending template.
+
 See also: :ttag:`{% ssi %}<ssi>`.
 
 .. templatetag:: load
@@ -778,11 +781,11 @@ Example::
     It is {% now "jS F Y H:i" %}
 
 Note that you can backslash-escape a format string if you want to use the
-"raw" value. In this example, "f" is backslash-escaped, because otherwise
-"f" is a format string that displays the time. The "o" doesn't need to be
-escaped, because it's not a format character::
+"raw" value. In this example, both "o" and "f" are backslash-escaped, because
+otherwise each is a format string that displays the year and the time,
+respectively::
 
-    It is the {% now "jS o\f F" %}
+    It is the {% now "jS \o\f F" %}
 
 This would display as "It is the 4th of September".
 
@@ -1139,13 +1142,15 @@ If ``this_value`` is 175, ``max_value`` is 200, and ``max_width`` is 100, the
 image in the above example will be 88 pixels wide
 (because 175/200 = .875; .875 * 100 = 87.5 which is rounded up to 88).
 
-.. versionchanged:: 1.7
-
 In some cases you might want to capture the result of ``widthratio`` in a
 variable. It can be useful, for instance, in a :ttag:`blocktrans` like this::
 
     {% widthratio this_value max_value max_width as width %}
     {% blocktrans %}The width is: {{ width }}{% endblocktrans %}
+
+.. versionchanged:: 1.7
+
+    The ability to use "as" with this tag like in the example above was added.
 
 .. templatetag:: with
 
@@ -2021,9 +2026,9 @@ If ``some_list`` is ``['a', 'b', 'c']``, the output will be ``['a', 'b']``.
 slugify
 ^^^^^^^
 
-Converts to lowercase, removes non-word characters (alphanumerics and
-underscores) and converts spaces to hyphens. Also strips leading and trailing
-whitespace.
+Converts to ASCII. Converts spaces to hyphens. Removes characters that aren't
+alphanumerics, underscores, or hyphens. Converts to lowercase. Also strips
+leading and trailing whitespace.
 
 For example::
 

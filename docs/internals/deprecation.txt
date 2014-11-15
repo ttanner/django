@@ -12,6 +12,9 @@ about each item can often be found in the release notes of two versions prior.
 2.0
 ---
 
+See the :ref:`Django 1.8 release notes<deprecated-features-1.8>` for more
+details on these changes.
+
 * ``cycle`` and ``firstof`` template tags will be removed from the ``future``
   template tag library (used during the 1.6/1.7 deprecation period).
 
@@ -38,6 +41,17 @@ about each item can often be found in the release notes of two versions prior.
   :class:`~django.core.management.BaseCommand` instead, which takes no arguments
   by default.
 
+* ``django.db.models.sql.aggregates`` module will be removed.
+
+* ``django.contrib.gis.db.models.sql.aggregates`` module will be removed.
+
+* The following methods and properties of ``django.db.sql.query.Query`` will
+  be removed:
+
+    * Properties: ``aggregates`` and ``aggregate_select``
+    * Methods: ``add_aggregate``, ``set_aggregate_mask``, and
+      ``append_aggregate_mask``.
+
 * ``django.template.resolve_variable`` will be removed.
 
 * The ``error_message`` argument of ``django.forms.RegexField`` will be removed.
@@ -56,6 +70,17 @@ about each item can often be found in the release notes of two versions prior.
 
 * The ``is_admin_site`` argument to
   ``django.contrib.auth.views.password_reset()`` will be removed.
+
+* ``django.db.models.field.subclassing.SubfieldBase`` will be removed.
+
+* ``django.utils.checksums`` will be removed; its functionality is included
+  in django-localflavor 1.1+.
+
+* The ``original_content_type_id`` attribute on
+  ``django.contrib.admin.helpers.InlineAdminForm`` will be removed.
+
+* The backwards compatibility shim to allow ``FormMixin.get_form()`` to be
+  defined with no default value for its ``form_class`` argument will be removed.
 
 .. _deprecation-removed-in-1.9:
 

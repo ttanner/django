@@ -90,7 +90,7 @@ class AdminViewBasicTestCase(TestCase):
         content.
         """
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.content.index(force_bytes(text1)) < response.content.index(force_bytes(text2)),
+        self.assertLess(response.content.index(force_bytes(text1)), response.content.index(force_bytes(text2)),
             failing_msg)
 
 
@@ -479,7 +479,7 @@ class AdminViewBasicTest(AdminViewBasicTestCase):
         response = self.client.get('/test_admin/%s/admin_views/thing/' % self.urlbit, {'notarealfield': '5'})
         self.assertRedirects(response, '/test_admin/%s/admin_views/thing/?e=1' % self.urlbit)
 
-        # Spanning relationships through an inexistant related object (Refs #16716)
+        # Spanning relationships through a nonexistent related object (Refs #16716)
         response = self.client.get('/test_admin/%s/admin_views/thing/' % self.urlbit, {'notarealfield__whatever': '5'})
         self.assertRedirects(response, '/test_admin/%s/admin_views/thing/?e=1' % self.urlbit)
 
@@ -605,7 +605,7 @@ class AdminViewBasicTest(AdminViewBasicTestCase):
             self.assertEqual(response.status_code, 400)
             self.assertEqual(len(calls), 1)
 
-        # Specifying a field that is not refered by any other model registered
+        # Specifying a field that is not referred by any other model registered
         # to this admin site should raise an exception.
         with patch_logger('django.security.DisallowedModelAdminToField', 'error') as calls:
             response = self.client.get("/test_admin/admin/admin_views/section/", {TO_FIELD_VAR: 'name'})
@@ -620,9 +620,18 @@ class AdminViewBasicTest(AdminViewBasicTestCase):
         response = self.client.get("/test_admin/admin/admin_views/m2mreference/", {TO_FIELD_VAR: 'id'})
         self.assertEqual(response.status_code, 200)
 
-        # Specifying a field that is not refered by any other model directly registered
+        # #23604 - Specifying the pk of this model should be allowed when this model defines a m2m relationship
+        response = self.client.get("/test_admin/admin/admin_views/ingredient/", {TO_FIELD_VAR: 'id'})
+        self.assertEqual(response.status_code, 200)
+
+        # #23329 - Specifying a field that is not referred by any other model directly registered
         # to this admin site but registered through inheritance should be allowed.
         response = self.client.get("/test_admin/admin/admin_views/referencedbyparent/", {TO_FIELD_VAR: 'id'})
+        self.assertEqual(response.status_code, 200)
+
+        # #23431 - Specifying a field that is only referred to by a inline of a registered
+        # model should be allowed.
+        response = self.client.get("/test_admin/admin/admin_views/referencedbyinline/", {TO_FIELD_VAR: 'id'})
         self.assertEqual(response.status_code, 200)
 
         # We also want to prevent the add and change view from leaking a
@@ -857,7 +866,7 @@ class AdminViewFormUrlTest(TestCase):
         Tests whether change_view has form_url in response.context
         """
         response = self.client.get('/test_admin/%s/admin_views/section/1/' % self.urlbit)
-        self.assertTrue('form_url' in response.context, msg='form_url not present in response.context')
+        self.assertIn('form_url', response.context, msg='form_url not present in response.context')
         self.assertEqual(response.context['form_url'], 'pony')
 
     def test_initial_data_can_be_overridden(self):
@@ -2469,9 +2478,26 @@ class AdminSearchTest(TestCase):
         """
         Test presence of reset link in search bar ("1 result (_x total_)").
         """
-        response = self.client.get('/test_admin/admin/admin_views/person/?q=Gui')
+        #   1 query for session + 1 for fetching user
+        # + 1 for filtered result + 1 for filtered count
+        # + 1 for total count
+        with self.assertNumQueries(5):
+            response = self.client.get('/test_admin/admin/admin_views/person/?q=Gui')
         self.assertContains(response,
             """<span class="small quiet">1 result (<a href="?">3 total</a>)</span>""",
+            html=True)
+
+    def test_no_total_count(self):
+        """
+        #8408 -- "Show all" should be displayed instead of the total count if
+        ModelAdmin.show_full_result_count is False.
+        """
+        #   1 query for session + 1 for fetching user
+        # + 1 for filtered result + 1 for filtered count
+        with self.assertNumQueries(4):
+            response = self.client.get('/test_admin/admin/admin_views/recommendation/?q=bar')
+        self.assertContains(response,
+            """<span class="small quiet">1 result (<a href="?">Show all</a>)</span>""",
             html=True)
 
 
@@ -3792,6 +3818,37 @@ class SeleniumAdminViewsFirefoxTests(AdminSeleniumWebDriverTestCase):
             self.selenium.find_element_by_id('id_start_date_0')
         )
 
+    def test_cancel_delete_confirmation(self):
+        "Cancelling the deletion of an object takes the user back one page."
+        pizza = Pizza.objects.create(name="Panucci's Double Cheese")
+        url = reverse('admin:admin_views_pizza_change', args=(pizza.id,))
+        full_url = '%s%s' % (self.live_server_url, url)
+        self.admin_login(username='super', password='secret', login_url='/test_admin/admin/')
+        self.selenium.get(full_url)
+        self.selenium.find_element_by_class_name('deletelink').click()
+        self.selenium.find_element_by_class_name('cancel-link').click()
+        self.assertEqual(self.selenium.current_url, full_url)
+        self.assertEqual(Pizza.objects.count(), 1)
+
+    def test_cancel_delete_related_confirmation(self):
+        """
+        Cancelling the deletion of an object with relations takes the user back
+        one page.
+        """
+        pizza = Pizza.objects.create(name="Panucci's Double Cheese")
+        topping1 = Topping.objects.create(name="Cheddar")
+        topping2 = Topping.objects.create(name="Mozzarella")
+        pizza.toppings.add(topping1, topping2)
+        url = reverse('admin:admin_views_pizza_change', args=(pizza.id,))
+        full_url = '%s%s' % (self.live_server_url, url)
+        self.admin_login(username='super', password='secret', login_url='/test_admin/admin/')
+        self.selenium.get(full_url)
+        self.selenium.find_element_by_class_name('deletelink').click()
+        self.selenium.find_element_by_class_name('cancel-link').click()
+        self.assertEqual(self.selenium.current_url, full_url)
+        self.assertEqual(Pizza.objects.count(), 1)
+        self.assertEqual(Topping.objects.count(), 2)
+
 
 class SeleniumAdminViewsChromeTests(SeleniumAdminViewsFirefoxTests):
     webdriver_class = 'selenium.webdriver.chrome.webdriver.WebDriver'
@@ -4066,7 +4123,7 @@ class UserAdminTest(TestCase):
         })
         self.assertEqual(response.status_code, 200)
         adminform = response.context['adminform']
-        self.assertTrue('password' not in adminform.form.errors)
+        self.assertNotIn('password', adminform.form.errors)
         self.assertEqual(adminform.form.errors['password2'],
             ["The two password fields didn't match."])
 
@@ -4983,7 +5040,7 @@ class AdminViewOnSiteTests(TestCase):
 
         # just verifying the parent form failed validation, as expected --
         # this isn't the regression test
-        self.assertTrue('some_required_info' in response.context['adminform'].form.errors)
+        self.assertIn('some_required_info', response.context['adminform'].form.errors)
 
         # actual regression test
         for error_set in response.context['inline_admin_formset'].formset.errors:
@@ -5013,7 +5070,7 @@ class AdminViewOnSiteTests(TestCase):
 
         # just verifying the parent form failed validation, as expected --
         # this isn't the regression test
-        self.assertTrue('some_required_info' in response.context['adminform'].form.errors)
+        self.assertIn('some_required_info', response.context['adminform'].form.errors)
 
         # actual regression test
         for error_set in response.context['inline_admin_formset'].formset.errors:
@@ -5123,3 +5180,19 @@ class AdminGenericRelationTests(TestCase):
             validator.validate_list_filter(GenericFKAdmin, Plot)
         except ImproperlyConfigured:
             self.fail("Couldn't validate a GenericRelation -> FK path in ModelAdmin.list_filter")
+
+
+@override_settings(ROOT_URLCONF="admin_views.urls")
+class TestEtagWithAdminView(TestCase):
+    # See https://code.djangoproject.com/ticket/16003
+
+    def test_admin(self):
+        with self.settings(USE_ETAGS=False):
+            response = self.client.get('/test_admin/admin/')
+            self.assertEqual(response.status_code, 302)
+            self.assertFalse(response.has_header('ETag'))
+
+        with self.settings(USE_ETAGS=True):
+            response = self.client.get('/test_admin/admin/')
+            self.assertEqual(response.status_code, 302)
+            self.assertTrue(response.has_header('ETag'))

@@ -15,9 +15,11 @@ from wsgiref import simple_server
 from wsgiref.util import FileWrapper   # NOQA: for backwards compatibility
 
 from django.core.exceptions import ImproperlyConfigured
+from django.core.handlers.wsgi import ISO_8859_1, UTF_8
 from django.core.management.color import color_style
 from django.core.wsgi import get_wsgi_application
 from django.utils import six
+from django.utils.encoding import uri_to_iri
 from django.utils.module_loading import import_string
 from django.utils.six.moves import socketserver
 
@@ -85,7 +87,13 @@ class WSGIRequestHandler(simple_server.WSGIRequestHandler, object):
         return self.client_address[0]
 
     def log_message(self, format, *args):
-        msg = "[%s] %s\n" % (self.log_date_time_string(), format % args)
+
+        msg = "[%s]" % self.log_date_time_string()
+        try:
+            msg += "%s\n" % (format % args)
+        except UnicodeDecodeError:
+            # e.g. accessing the server via SSL on Python 2
+            msg += "\n"
 
         # Utilize terminal colors, if available
         if args[1][0] == '2':
@@ -100,12 +108,31 @@ class WSGIRequestHandler(simple_server.WSGIRequestHandler, object):
         elif args[1] == '404':
             msg = self.style.HTTP_NOT_FOUND(msg)
         elif args[1][0] == '4':
+            # 0x16 = Handshake, 0x03 = SSL 3.0 or TLS 1.x
+            if args[0].startswith(str('\x16\x03')):
+                msg = ("You're accessing the developement server over HTTPS, "
+                    "but it only supports HTTP.\n")
             msg = self.style.HTTP_BAD_REQUEST(msg)
         else:
             # Any 5XX, or any other response
             msg = self.style.HTTP_SERVER_ERROR(msg)
 
         sys.stderr.write(msg)
+
+    def get_environ(self):
+        env = super(WSGIRequestHandler, self).get_environ()
+
+        path = self.path
+        if '?' in path:
+            path = path.partition('?')[0]
+
+        path = uri_to_iri(path).encode(UTF_8)
+        # Under Python 3, non-ASCII values in the WSGI environ are arbitrarily
+        # decoded with ISO-8859-1. We replicate this behavior here.
+        # Refs comment in `get_bytes_from_wsgi()`.
+        env['PATH_INFO'] = path.decode(ISO_8859_1) if six.PY3 else path
+
+        return env
 
 
 def run(addr, port, wsgi_handler, ipv6=False, threading=False):

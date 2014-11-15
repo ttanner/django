@@ -1,5 +1,5 @@
 from django.test import TestCase
-from django.db.migrations.graph import MigrationGraph, CircularDependencyError
+from django.db.migrations.graph import CircularDependencyError, MigrationGraph, NodeNotFoundError
 
 
 class GraphTests(TestCase):
@@ -134,6 +134,21 @@ class GraphTests(TestCase):
             graph.forwards_plan, ("app_a", "0003"),
         )
 
+    def test_dfs(self):
+        graph = MigrationGraph()
+        root = ("app_a", "1")
+        graph.add_node(root, None)
+        expected = [root]
+        for i in range(2, 1000):
+            parent = ("app_a", str(i - 1))
+            child = ("app_a", str(i))
+            graph.add_node(child, None)
+            graph.add_dependency(str(i), child, parent)
+            expected.append(child)
+
+        actual = graph.dfs(root, lambda x: graph.dependents.get(x, set()))
+        self.assertEqual(expected[::-1], actual)
+
     def test_plan_invalid_node(self):
         """
         Tests for forwards/backwards_plan of nonexistent node.
@@ -141,10 +156,10 @@ class GraphTests(TestCase):
         graph = MigrationGraph()
         message = "Node ('app_b', '0001') not a valid node"
 
-        with self.assertRaisesMessage(ValueError, message):
+        with self.assertRaisesMessage(NodeNotFoundError, message):
             graph.forwards_plan(("app_b", "0001"))
 
-        with self.assertRaisesMessage(ValueError, message):
+        with self.assertRaisesMessage(NodeNotFoundError, message):
             graph.backwards_plan(("app_b", "0001"))
 
     def test_missing_parent_nodes(self):
@@ -159,7 +174,8 @@ class GraphTests(TestCase):
         graph.add_node(("app_b", "0001"), None)
         graph.add_dependency("app_a.0003", ("app_a", "0003"), ("app_a", "0002"))
         graph.add_dependency("app_a.0002", ("app_a", "0002"), ("app_a", "0001"))
-        with self.assertRaisesMessage(KeyError, "Migration app_a.0001 dependencies references nonexistent parent node ('app_b', '0002')"):
+        msg = "Migration app_a.0001 dependencies reference nonexistent parent node ('app_b', '0002')"
+        with self.assertRaisesMessage(NodeNotFoundError, msg):
             graph.add_dependency("app_a.0001", ("app_a", "0001"), ("app_b", "0002"))
 
     def test_missing_child_nodes(self):
@@ -169,5 +185,33 @@ class GraphTests(TestCase):
         # Build graph
         graph = MigrationGraph()
         graph.add_node(("app_a", "0001"), None)
-        with self.assertRaisesMessage(KeyError, "Migration app_a.0002 dependencies references nonexistent child node ('app_a', '0002')"):
+        msg = "Migration app_a.0002 dependencies reference nonexistent child node ('app_a', '0002')"
+        with self.assertRaisesMessage(NodeNotFoundError, msg):
             graph.add_dependency("app_a.0002", ("app_a", "0002"), ("app_a", "0001"))
+
+    def test_infinite_loop(self):
+        """
+        Tests a complex dependency graph:
+
+        app_a:        0001 <-
+                             \
+        app_b:        0001 <- x 0002 <-
+                       /               \
+        app_c:   0001<-  <------------- x 0002
+
+        And apply sqashing on app_c.
+        """
+        graph = MigrationGraph()
+
+        graph.add_node(("app_a", "0001"), None)
+        graph.add_node(("app_b", "0001"), None)
+        graph.add_node(("app_b", "0002"), None)
+        graph.add_node(("app_c", "0001_squashed_0002"), None)
+
+        graph.add_dependency("app_b.0001", ("app_b", "0001"), ("app_c", "0001_squashed_0002"))
+        graph.add_dependency("app_b.0002", ("app_b", "0002"), ("app_a", "0001"))
+        graph.add_dependency("app_b.0002", ("app_b", "0002"), ("app_b", "0001"))
+        graph.add_dependency("app_c.0001_squashed_0002", ("app_c", "0001_squashed_0002"), ("app_b", "0002"))
+
+        with self.assertRaises(CircularDependencyError):
+            graph.forwards_plan(("app_c", "0001_squashed_0002"))

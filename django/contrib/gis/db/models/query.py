@@ -1,9 +1,9 @@
 from django.db import connections
-from django.db.models.query import QuerySet, ValuesQuerySet, ValuesListQuerySet
+from django.db.models.query import QuerySet
 
 from django.contrib.gis.db.models import aggregates
 from django.contrib.gis.db.models.fields import get_srid_info, PointField, LineStringField
-from django.contrib.gis.db.models.sql import AreaField, DistanceField, GeomField, GeoQuery
+from django.contrib.gis.db.models.sql import AreaField, DistanceField, GeomField, GeoQuery, GMLField
 from django.contrib.gis.geometry.backend import Geometry
 from django.contrib.gis.measure import Area, Distance
 
@@ -17,19 +17,6 @@ class GeoQuerySet(QuerySet):
     def __init__(self, model=None, query=None, using=None, hints=None):
         super(GeoQuerySet, self).__init__(model=model, query=query, using=using, hints=hints)
         self.query = query or GeoQuery(self.model)
-
-    def values(self, *fields):
-        return self._clone(klass=GeoValuesQuerySet, setup=True, _fields=fields)
-
-    def values_list(self, *fields, **kwargs):
-        flat = kwargs.pop('flat', False)
-        if kwargs:
-            raise TypeError('Unexpected keyword arguments to values_list: %s'
-                    % (list(kwargs),))
-        if flat and len(fields) > 1:
-            raise TypeError("'flat' is not valid when values_list is called with more than one field.")
-        return self._clone(klass=GeoValuesListQuerySet, setup=True, flat=flat,
-                           _fields=fields)
 
     ### GeoQuerySet Methods ###
     def area(self, tolerance=0.05, **kwargs):
@@ -188,6 +175,8 @@ class GeoQuerySet(QuerySet):
         if backend.postgis:
             s['procedure_fmt'] = '%(version)s,%(geo_col)s,%(precision)s'
             s['procedure_args'] = {'precision': precision, 'version': version}
+        if backend.oracle:
+            s['select_field'] = GMLField()
 
         return self._spatial_attribute('gml', s, **kwargs)
 
@@ -541,7 +530,7 @@ class GeoQuerySet(QuerySet):
             # transformation SQL.
             geom = geo_field.get_prep_value(settings['procedure_args'][name])
             params = geo_field.get_db_prep_lookup('contains', geom, connection=connection)
-            geom_placeholder = geo_field.get_placeholder(geom, connection)
+            geom_placeholder = geo_field.get_placeholder(geom, None, connection)
 
             # Replacing the procedure format with that of any needed
             # transformation SQL.
@@ -632,7 +621,10 @@ class GeoQuerySet(QuerySet):
                 geodetic = unit_name.lower() in geo_field.geodetic_units
 
             if geodetic and not connection.features.supports_distance_geodetic:
-                raise ValueError('This database does not support linear distance calculations on geodetic coordinate systems.')
+                raise ValueError(
+                    'This database does not support linear distance '
+                    'calculations on geodetic coordinate systems.'
+                )
 
             if distance:
                 if self.query.transformed_srid:
@@ -674,7 +666,10 @@ class GeoQuerySet(QuerySet):
                         if not isinstance(geo_field, PointField):
                             raise ValueError('Spherical distance calculation only supported on PointFields.')
                         if not str(Geometry(six.memoryview(params[0].ewkb)).geom_type) == 'Point':
-                            raise ValueError('Spherical distance calculation only supported with Point Geometry parameters')
+                            raise ValueError(
+                                'Spherical distance calculation only supported with '
+                                'Point Geometry parameters'
+                            )
                     # The `function` procedure argument needs to be set differently for
                     # geodetic distance calculations.
                     if spheroid:
@@ -767,16 +762,3 @@ class GeoQuerySet(QuerySet):
             return self.query.get_compiler(self.db)._field_column(geo_field, parent_model._meta.db_table)
         else:
             return self.query.get_compiler(self.db)._field_column(geo_field)
-
-
-class GeoValuesQuerySet(ValuesQuerySet):
-    def __init__(self, *args, **kwargs):
-        super(GeoValuesQuerySet, self).__init__(*args, **kwargs)
-        # This flag tells `resolve_columns` to run the values through
-        # `convert_values`.  This ensures that Geometry objects instead
-        # of string values are returned with `values()` or `values_list()`.
-        self.query.geo_values = True
-
-
-class GeoValuesListQuerySet(GeoValuesQuerySet, ValuesListQuerySet):
-    pass

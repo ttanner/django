@@ -12,7 +12,7 @@ from django.test import TestCase, RequestFactory, override_settings
 from django.utils.encoding import force_text
 from django.utils import six
 
-from .models import Book, Department, Employee
+from .models import Book, Department, Employee, Bookmark, TaggedItem
 
 
 def select_by(dictlist, key, value):
@@ -91,11 +91,11 @@ class DepartmentListFilterLookupWithNonStringValue(SimpleListFilter):
     parameter_name = 'department'
 
     def lookups(self, request, model_admin):
-        return sorted(set([
+        return sorted({
             (employee.department.id,  # Intentionally not a string (Refs #19318)
              employee.department.code)
             for employee in model_admin.get_queryset(request).all()
-        ]))
+        })
 
     def queryset(self, request, queryset):
         if self.value():
@@ -203,6 +203,10 @@ class DepartmentFilterUnderscoredEmployeeAdmin(EmployeeAdmin):
 
 class DepartmentFilterDynamicValueBookAdmin(EmployeeAdmin):
     list_filter = [DepartmentListFilterLookupWithDynamicValue, ]
+
+
+class BookmarkAdminGenericRelation(ModelAdmin):
+    list_filter = ['tags__tag']
 
 
 class ListFiltersTests(TestCase):
@@ -402,7 +406,7 @@ class ListFiltersTests(TestCase):
         # Make sure that all users are present in the author's list filter
         filterspec = changelist.get_filters(request)[0][1]
         expected = [(self.alfred.pk, 'alfred'), (self.bob.pk, 'bob'), (self.lisa.pk, 'lisa')]
-        self.assertEqual(filterspec.lookup_choices, expected)
+        self.assertEqual(sorted(filterspec.lookup_choices), sorted(expected))
 
         request = self.request_factory.get('/', {'author__isnull': 'True'})
         changelist = self.get_changelist(request, Book, modeladmin)
@@ -438,7 +442,7 @@ class ListFiltersTests(TestCase):
         # Make sure that all users are present in the contrib's list filter
         filterspec = changelist.get_filters(request)[0][2]
         expected = [(self.alfred.pk, 'alfred'), (self.bob.pk, 'bob'), (self.lisa.pk, 'lisa')]
-        self.assertEqual(filterspec.lookup_choices, expected)
+        self.assertEqual(sorted(filterspec.lookup_choices), sorted(expected))
 
         request = self.request_factory.get('/', {'contributors__isnull': 'True'})
         changelist = self.get_changelist(request, Book, modeladmin)
@@ -526,7 +530,7 @@ class ListFiltersTests(TestCase):
         # Make sure that only actual authors are present in author's list filter
         filterspec = changelist.get_filters(request)[0][4]
         expected = [(self.alfred.pk, 'alfred'), (self.bob.pk, 'bob')]
-        self.assertEqual(filterspec.lookup_choices, expected)
+        self.assertEqual(sorted(filterspec.lookup_choices), sorted(expected))
 
     def test_relatedonlyfieldlistfilter_manytomany(self):
         modeladmin = BookAdminRelatedOnlyFilter(Book, site)
@@ -537,7 +541,25 @@ class ListFiltersTests(TestCase):
         # Make sure that only actual contributors are present in contrib's list filter
         filterspec = changelist.get_filters(request)[0][5]
         expected = [(self.bob.pk, 'bob'), (self.lisa.pk, 'lisa')]
-        self.assertEqual(filterspec.lookup_choices, expected)
+        self.assertEqual(sorted(filterspec.lookup_choices), sorted(expected))
+
+    def test_listfilter_genericrelation(self):
+        django_bookmark = Bookmark.objects.create(url='https://www.djangoproject.com/')
+        python_bookmark = Bookmark.objects.create(url='https://www.python.org/')
+        kernel_bookmark = Bookmark.objects.create(url='https://www.kernel.org/')
+
+        TaggedItem.objects.create(content_object=django_bookmark, tag='python')
+        TaggedItem.objects.create(content_object=python_bookmark, tag='python')
+        TaggedItem.objects.create(content_object=kernel_bookmark, tag='linux')
+
+        modeladmin = BookmarkAdminGenericRelation(Bookmark, site)
+
+        request = self.request_factory.get('/', {'tags__tag': 'python'})
+        changelist = self.get_changelist(request, Bookmark, modeladmin)
+        queryset = changelist.get_queryset(request)
+
+        expected = [python_bookmark, django_bookmark]
+        self.assertEqual(list(queryset), expected)
 
     def test_booleanfieldlistfilter(self):
         modeladmin = BookAdmin(Book, site)

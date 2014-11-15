@@ -9,6 +9,7 @@ import datetime
 import os
 import re
 import sys
+import uuid
 import warnings
 from decimal import Decimal, DecimalException
 from io import BytesIO
@@ -41,7 +42,7 @@ __all__ = (
     'BooleanField', 'NullBooleanField', 'ChoiceField', 'MultipleChoiceField',
     'ComboField', 'MultiValueField', 'FloatField', 'DecimalField',
     'SplitDateTimeField', 'IPAddressField', 'GenericIPAddressField', 'FilePathField',
-    'SlugField', 'TypedChoiceField', 'TypedMultipleChoiceField'
+    'SlugField', 'TypedChoiceField', 'TypedMultipleChoiceField', 'UUIDField',
 )
 
 
@@ -179,17 +180,6 @@ class Field(six.with_metaclass(RenameFieldMethods, object)):
         Field.
         """
         return {}
-
-    def get_limit_choices_to(self):
-        """
-        Returns ``limit_choices_to`` for this form field.
-
-        If it is a callable, it will be invoked and the result will be
-        returned.
-        """
-        if callable(self.limit_choices_to):
-            return self.limit_choices_to()
-        return self.limit_choices_to
 
     def has_changed(self, initial, data):
         """
@@ -643,7 +633,10 @@ class FileField(Field):
 
 class ImageField(FileField):
     default_error_messages = {
-        'invalid_image': _("Upload a valid image. The file you uploaded was either not an image or a corrupted image."),
+        'invalid_image': _(
+            "Upload a valid image. The file you uploaded was either not an "
+            "image or a corrupted image."
+        ),
     }
 
     def to_python(self, data):
@@ -794,6 +787,15 @@ class NullBooleanField(BooleanField):
         return initial != data
 
 
+class CallableChoiceIterator(object):
+    def __init__(self, choices_func):
+        self.choices_func = choices_func
+
+    def __iter__(self):
+        for e in self.choices_func():
+            yield e
+
+
 class ChoiceField(Field):
     widget = Select
     default_error_messages = {
@@ -818,7 +820,12 @@ class ChoiceField(Field):
         # Setting choices also sets the choices on the widget.
         # choices can be any iterable, but we call list() on it because
         # it will be consumed more than once.
-        self._choices = self.widget.choices = list(value)
+        if callable(value):
+            value = CallableChoiceIterator(value)
+        else:
+            value = list(value)
+
+        self._choices = self.widget.choices = value
 
     choices = property(_get_choices, _set_choices)
 
@@ -1221,3 +1228,25 @@ class SlugField(CharField):
     def clean(self, value):
         value = self.to_python(value).strip()
         return super(SlugField, self).clean(value)
+
+
+class UUIDField(CharField):
+    default_error_messages = {
+        'invalid': _('Enter a valid UUID.'),
+    }
+
+    def prepare_value(self, value):
+        if isinstance(value, uuid.UUID):
+            return value.hex
+        return value
+
+    def to_python(self, value):
+        value = super(UUIDField, self).to_python(value)
+        if value in self.empty_values:
+            return None
+        if not isinstance(value, uuid.UUID):
+            try:
+                value = uuid.UUID(value)
+            except ValueError:
+                raise ValidationError(self.error_messages['invalid'], code='invalid')
+        return value

@@ -328,11 +328,9 @@ class BaseModelForm(BaseForm):
         # Apply ``limit_choices_to`` to each field.
         for field_name in self.fields:
             formfield = self.fields[field_name]
-            if hasattr(formfield, 'queryset'):
-                limit_choices_to = formfield.limit_choices_to
+            if hasattr(formfield, 'queryset') and hasattr(formfield, 'get_limit_choices_to'):
+                limit_choices_to = formfield.get_limit_choices_to()
                 if limit_choices_to is not None:
-                    if callable(limit_choices_to):
-                        limit_choices_to = limit_choices_to()
                     formfield.queryset = formfield.queryset.complex_filter(limit_choices_to)
 
     def _get_validation_exclusions(self):
@@ -949,7 +947,7 @@ def _get_foreign_key(parent_model, model, fk_name=None, can_fail=False):
                     (fk.rel.to != parent_model and
                      fk.rel.to not in parent_model._meta.get_parent_list()):
                 raise ValueError(
-                    "fk_name '%s' is not a ForeignKey to '%s.%'."
+                    "fk_name '%s' is not a ForeignKey to '%s.%s'."
                     % (fk_name, parent_model._meta.app_label, parent_model._meta.object_name))
         elif len(fks_to_parent) == 0:
             raise ValueError(
@@ -969,12 +967,22 @@ def _get_foreign_key(parent_model, model, fk_name=None, can_fail=False):
             if can_fail:
                 return
             raise ValueError(
-                "'%s.%s' has no ForeignKey to '%s.%s'."
-                % (model._meta.app_label, model._meta.object_name, parent_model._meta.app_label, parent_model._meta.object_name))
+                "'%s.%s' has no ForeignKey to '%s.%s'." % (
+                    model._meta.app_label,
+                    model._meta.object_name,
+                    parent_model._meta.app_label,
+                    parent_model._meta.object_name,
+                )
+            )
         else:
             raise ValueError(
-                "'%s.%s' has more than one ForeignKey to '%s.%s'."
-                % (model._meta.app_label, model._meta.object_name, parent_model._meta.app_label, parent_model._meta.object_name))
+                "'%s.%s' has more than one ForeignKey to '%s.%s'." % (
+                    model._meta.app_label,
+                    model._meta.object_name,
+                    parent_model._meta.app_label,
+                    parent_model._meta.object_name,
+                )
+            )
     return fk
 
 
@@ -1073,12 +1081,12 @@ class ModelChoiceIterator(object):
         if self.field.cache_choices:
             if self.field.choice_cache is None:
                 self.field.choice_cache = [
-                    self.choice(obj) for obj in self.queryset.all()
+                    self.choice(obj) for obj in self.queryset.iterator()
                 ]
             for choice in self.field.choice_cache:
                 yield choice
         else:
-            for obj in self.queryset.all():
+            for obj in self.queryset.iterator():
                 yield self.choice(obj)
 
     def __len__(self):
@@ -1122,6 +1130,17 @@ class ModelChoiceField(ChoiceField):
         self.limit_choices_to = limit_choices_to   # limit the queryset later.
         self.choice_cache = None
         self.to_field_name = to_field_name
+
+    def get_limit_choices_to(self):
+        """
+        Returns ``limit_choices_to`` for this form field.
+
+        If it is a callable, it will be invoked and the result will be
+        returned.
+        """
+        if callable(self.limit_choices_to):
+            return self.limit_choices_to()
+        return self.limit_choices_to
 
     def __deepcopy__(self, memo):
         result = super(ChoiceField, self).__deepcopy__(memo)

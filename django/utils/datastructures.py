@@ -244,26 +244,6 @@ class SortedDict(dict):
         self.keyOrder = []
 
 
-def dict_merge(a, b):
-    """
-    Utility to recursively merge two dicts, taking care not to overwrite subkeys
-    (which would happen with dict.update), but keeping existing key including
-    those from subdictionaries (optionally opted-out if a `_clear_defaults` key
-    is present).
-    Thanks Ross McFarland (https://www.xormedia.com/recursively-merge-dictionaries-in-python/)
-    """
-    if b.get('_clear_defaults'):
-        return copy.deepcopy(b)
-
-    result = copy.deepcopy(a)
-    for key, value in six.iteritems(b):
-        if key in a and isinstance(result[key], dict):
-            result[key] = dict_merge(result[key], value)
-        else:
-            result[key] = value
-    return result
-
-
 class OrderedSet(object):
     """
     A set which keeps the ordering of the inserted items.
@@ -291,8 +271,11 @@ class OrderedSet(object):
     def __contains__(self, item):
         return item in self.dict
 
-    def __nonzero__(self):
+    def __bool__(self):
         return bool(self.dict)
+
+    def __nonzero__(self):      # Python 2 compatibility
+        return type(self).__bool__(self)
 
 
 class MultiValueDictKeyError(KeyError):
